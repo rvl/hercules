@@ -44,4 +44,10 @@ migrations =
   [ MigrationInitialization
   , MigrationScript "Create the users table"
                     $(embedFile "src/migrations/create-users.sql")
+  , MigrationScript "Create the github repo cache"
+                    $(embedFile "src/migrations/create-repos.sql")
+  , MigrationScript "Create the hydra build tables"
+                    $(embedFile "src/migrations/create-hydra-build.sql")
+  , MigrationScript "Create the hydra project views"
+                    $(embedFile "src/migrations/create-hydra-views.sql")
   ]

@@ -11,7 +11,7 @@ module Hercules.Config
   ) where
 
 import Data.Aeson
-import Data.Aeson.TH
+import Data.Aeson.Extra           (prefixOptions)
 import Data.Char                  (toLower)
 import Data.Text                  (Text)
 import Database.PostgreSQL.Simple (ConnectInfo (..))
@@ -36,14 +36,8 @@ data Config = Config { configPort                     :: Port
                      , configHydraConnectionString    :: Text
                      , configGoogleAuthInfo           :: Maybe AuthClientInfo
                      , configGitHubAuthInfo           :: Maybe AuthClientInfo
+                     , configDataPath                 :: FilePath
                      }
-  deriving(Read, Show)
+  deriving(Read, Show, Generic)
 
--- Derive JSON dropping 'config' and making the first character lowercase.
-deriveFromJSON defaultOptions
-  { fieldLabelModifier = \s ->
-      case drop (length "config") s of
-        []   -> []
-        x:xs -> toLower x : xs
-  }
-  ''Config
+instance FromJSON Config where parseJSON = genericParseJSON prefixOptions

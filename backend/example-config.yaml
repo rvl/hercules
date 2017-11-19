@@ -1,6 +1,7 @@
 port: 8080
 hostname: "localhost"
-accessLogLevel: Disabled
-secretKeyFile: "secret.key"
-hydraConnectionString: "postgresql://hydra@/hydra"
-herculesConnectionString: "postgresql://hercules@/hercules"
+access_log_level: Disabled
+secret_key_file: "secret.key"
+hydra_connection_string: "postgresql://hydra@/hydra"
+hercules_connection_string: "postgresql://hercules@/hercules"
+data_path: "/var/lib/hercules"

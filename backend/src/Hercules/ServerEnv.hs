@@ -72,6 +72,7 @@ data Env = Env { envHerculesConnectionPool :: Pool Connection
                , envCipher                 :: HerculesCipher
                , envPort                   :: Port
                , envHostname               :: HostName
+               , envDataPath               :: FilePath
                }
 
 -- | The cipher Hercues uses for encrypting the github access tokens
@@ -250,6 +251,7 @@ newEnv c@Config{..} authenticators =
             cipher
             configPort
             configHostname
+            configDataPath
 
 -- | Load a yaml configuration and run an 'App' value, useful for testing in
 -- the REPL.

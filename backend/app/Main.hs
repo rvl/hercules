@@ -85,6 +85,11 @@ options = info (helper <*> parser) description
           )
       <*> optional (authInfoParser "google")
       <*> optional (authInfoParser "github")
+      <*> strOption (fold [ long "data-path"
+                          , metavar "DIR"
+                          , help "A directory to store caches, etc"
+                          ]
+                    )
 
     authInfoParser name = AuthClientInfo
       <$> (BSC.pack <$> strOption (fold [ long (name ++ "-client")
@@ -105,4 +110,3 @@ options = info (helper <*> parser) description
       , header "hercules"
       , progDesc "A program to query a Hydra CI database"
       ]
-

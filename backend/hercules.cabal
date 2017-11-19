@@ -16,6 +16,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Control.Monad.Except.Extra
+                       Data.Aeson.Extra
                        Data.ByteString.Extra
                        Hercules.Lib
                        Hercules.API
@@ -25,6 +26,12 @@ library
                        Hercules.Database.Hercules.Migration
                        Hercules.Database.Hydra
                        Hercules.Encryption
+                       Hercules.Evaluate.Spec
+                       Hercules.Evaluate.Jobset
+                       Hercules.Evaluate.Service
+                       Hercules.Evaluate.Types
+                       Hercules.Input.Git
+                       Hercules.Input.NixHelper
                        Hercules.Log
                        Hercules.OAuth
                        Hercules.OAuth.Authenticators
@@ -32,12 +39,14 @@ library
                        Hercules.OAuth.Authenticators.Google
                        Hercules.OAuth.Types
                        Hercules.OAuth.User
+                       Hercules.Sync.GitHub
                        Hercules.Query.Hercules
                        Hercules.Query.Hydra
                        Hercules.ServerEnv
                        Hercules.Static
                        Hercules.Swagger
                        Network.URI.Extra
+                       Nix.Store
                        Opaleye.Extra
                        Servant.Mandatory
                        Servant.Redirect
@@ -46,8 +55,13 @@ library
                      , async
                      , blaze-html
                      , bytestring
+                     , containers
                      , cryptonite
+                     , data-default
+                     , directory
                      , file-embed
+                     , filepath
+                     , flock
                      , github
                      , hoauth2
                      , http-client
@@ -66,6 +80,7 @@ library
                      , postgresql-simple-migration
                      , product-profunctors
                      , profunctors
+                     , regex-pcre
                      , resource-pool
                      , safe
                      , say
@@ -79,6 +94,8 @@ library
                      , servant-server
                      , text
                      , time
+                     , typed-process
+                     , vector
                      , wai
                      , wai-extra
                      , warp
