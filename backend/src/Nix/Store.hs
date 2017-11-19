@@ -6,6 +6,7 @@ module Nix.Store
   ) where
 
 -- fixme: need to wrap nix libstore
+-- i think expipiplus1 has some code for this.
 
 addTempRoot :: FilePath -> IO ()
 addTempRoot _ = return ()

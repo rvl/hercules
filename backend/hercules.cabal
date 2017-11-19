@@ -28,6 +28,7 @@ library
                        Hercules.Encryption
                        Hercules.Evaluate.Spec
                        Hercules.Evaluate.Jobset
+                       Hercules.Evaluate.ReleaseExpr
                        Hercules.Evaluate.Service
                        Hercules.Evaluate.Types
                        Hercules.Input.Git
