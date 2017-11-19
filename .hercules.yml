@@ -1,0 +1,12 @@
+inputs:
+  nixpkgs:
+    type: git
+    uri: git://github.com/NixOS/nixpkgs.git
+    shallow: false
+    branch: master
+
+jobset: release.nix
+
+notifications:
+  email:
+    - hercules-ci@company.com
