@@ -1,4 +1,6 @@
-CREATE TABLE users(
+CREATE SCHEMA hercules;
+
+CREATE TABLE hercules.users(
   id bigserial PRIMARY KEY NOT NULL,
   name text,
   email text UNIQUE,

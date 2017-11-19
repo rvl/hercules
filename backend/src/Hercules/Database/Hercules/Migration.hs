@@ -43,11 +43,13 @@ migrations :: [MigrationCommand]
 migrations =
   [ MigrationInitialization
   , MigrationScript "Create the users table"
-                    $(embedFile "src/migrations/create-users.sql")
+                    $(embedFile "src/migrations/001-create-users.sql")
   , MigrationScript "Create the github repo cache"
-                    $(embedFile "src/migrations/create-repos.sql")
+                    $(embedFile "src/migrations/002-create-repos.sql")
+  , MigrationScript "Create the hercules jobset tables"
+                    $(embedFile "src/migrations/003-create-jobsets.sql")
   , MigrationScript "Create the hydra build tables"
-                    $(embedFile "src/migrations/create-hydra-build.sql")
+                    $(embedFile "src/migrations/004-create-hydra-build.sql")
   , MigrationScript "Create the hydra project views"
-                    $(embedFile "src/migrations/create-hydra-views.sql")
+                    $(embedFile "src/migrations/005-create-hydra-views.sql")
   ]
