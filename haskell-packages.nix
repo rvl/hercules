@@ -24,8 +24,8 @@ rec {
               };
             in pkgs.haskell.lib.doJailbreak (haskellPackageGen { doFilter = false; } "${src}/servant-auth-swagger");
 
-          # New versions for opaleye-gen
-          product-profunctors = super.product-profunctors_0_8_0_3;
+          # Has a better function for updating tables
+          opaleye = pkgs.haskell.lib.dontCheck super.opaleye_0_6_0_0;
         };
       };
 
