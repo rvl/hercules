@@ -108,19 +108,19 @@ withAuthenticated f = \case
     throwError err401
 
 getProjectNames :: App [Text]
-getProjectNames = runHydraQueryWithConnection projectNameQuery
+getProjectNames = runHerculesQueryWithConnection projectNameQuery
 
 getProject :: Text -> App (Maybe Project)
-getProject name = headMay <$> runHydraQueryWithConnection (projectQuery name)
+getProject name = headMay <$> runHerculesQueryWithConnection (projectQuery name)
 
 getProjects :: App [Project]
-getProjects = runHydraQueryWithConnection projectsQuery
+getProjects = runHerculesQueryWithConnection projectsQuery
 
 getProjectsWithJobsets :: App [ProjectWithJobsets]
 getProjectsWithJobsets =
   fmap (uncurry makeProjectWithJobsets . second toList)
   . groupSortOn projectName
-  <$> (runHydraQueryWithConnection projectsWithJobsetsQuery :: App [(Project, JobsetNullable)])
+  <$> (runHerculesQueryWithConnection projectsWithJobsetsQuery :: App [(Project, JobsetNullable)])
   where
     makeProjectWithJobsets :: Project -> [JobsetNullable] -> ProjectWithJobsets
     makeProjectWithJobsets p jms =
@@ -131,4 +131,3 @@ groupSortOn :: Ord k => (a -> k) -> [(a, v)] -> [(a, NE.NonEmpty v)]
 groupSortOn f = fmap (\x -> (fst $ NE.head x, fmap snd x))
           . NE.groupWith (f . fst)
           . sortOn (f . fst)
-

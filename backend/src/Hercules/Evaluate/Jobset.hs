@@ -1,44 +1,425 @@
+ {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
+
 module Hercules.Evaluate.Jobset
-  ( evaluateJobset
+  ( checkJobset
   ) where
 
 import Data.Text (Text)
-import Control.Exception (try, IOException)
-import Data.Either (isRight)
-
+import qualified Data.Text as T
+import Control.Exception.Lifted
+import Control.Monad.IO.Class
+import Safe
+import Say
+import Data.Monoid
+import Control.Monad
+import Data.Either (rights)
+import Data.Maybe
+import Data.List (nubBy, sort)
+import Data.Time.Clock (UTCTime, NominalDiffTime, getCurrentTime, diffUTCTime)
+import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
+import Prelude hiding (null)
+import Hercules.ServerEnv
 import Hercules.Evaluate.Types
 import Hercules.Input.Git
 import Hercules.Evaluate.Spec
+import Hercules.Query.Hercules
+import Hercules.Database.Hercules
+import GHC.Int
+import Data.Aeson
+import Data.Aeson.Types (parseMaybe)
+import Data.Map (Map, (!))
+import qualified Data.Map as M
+import Opaleye
+import System.Random.Shuffle (shuffleM)
+import System.FilePath ((</>), (<.>))
+import Data.Ord (comparing)
 
-evaluateJobset :: ProjectName -> JobsetName -> IO Evaluation
-evaluateJobset project jobset = undefined
+import Hercules.Evaluate.ReleaseExpr
+import Hercules.Evaluate.Fetch
+import qualified Hercules.Database.Hydra as Hydra
+import Hercules.Query.Hydra
 
-checkJobset :: ProjectName -> JobsetName -> IO Bool
-checkJobset p j = try doCheck >>= (\r -> updateJobset r >> return (isRight r))
+data JobsetInfo = JobsetInfo { infoRepo :: GithubRepo
+                             , infoBranch :: GithubBranch
+                             , infoSpec :: BuildSpec
+                             }
+
+-- | Jobset ID -- happens to also be the branch id currently.
+jobsetInfoId :: JobsetInfo -> JobsetId
+jobsetInfoId = githubBranchId . infoBranch
+
+-- | Project name text for a jobset.
+jobsetInfoProject :: JobsetInfo -> Text
+jobsetInfoProject = githubRepoName . infoRepo
+
+jobsetInfoKey :: JobsetInfo -> Text
+jobsetInfoKey js = jobsetInfoProject js <> ":" <> jobsetName js
+  where jobsetName = githubBranchName . infoBranch
+
+data EvalJob = EvalJob { evalJobName :: Text
+                       , evalJobInputs :: BuildInputs
+                       }
+
+evaluateJobset :: JobsetInfo -> App ()
+evaluateJobset js@(JobsetInfo repo branch spec) = do
+  ((src, buildInputs), checkoutTime) <- timeAction $ do
+    src <- fetchJobsetSource repo branch
+    buildInputs <- fetchInputs (githubRepoName repo) (githubBranchName branch) (buildInputs spec)
+    return (src, buildInputs)
+
+  let exprType = pathExprLang (buildJobset (srcBuildSpec src))
+      nixExprFullPath = srcNixStorePath src </> buildJobset spec
+      argsHash = hashReleaseExpr exprType nixExprFullPath buildInputs
+
+  -- If prev eval had exact same inputs, bail out.
+  prev <- checkUnchanged (jobsetInfoId js) argsHash
+  when (isNothing prev) $ do
+    (eval, evalTime) <- timeAction . liftIO $ evalJobs exprType buildInputs nixExprFullPath
+
+    (_, dbTime) <- withHerculesConnection (timeAction . createBuilds js eval src buildInputs argsHash checkoutTime evalTime)
+
+    -- Store the error messages for jobs that failed to evaluate.
+    updateJobsetError (evalErrorMsgs eval) (jobsetInfoId js)
+
+branchBuildSpec :: GithubBranch -> Maybe BuildSpec
+branchBuildSpec = parseMaybe parseJSON . githubBranchSpec
+
+timeAction :: MonadIO m => m a -> m (a, NominalDiffTime)
+timeAction act = do
+  start <- liftIO getCurrentTime
+  r <- act
+  stop <- liftIO getCurrentTime
+  return (r, diffUTCTime stop start)
+
+-- | corresponds to perl function evalJobs
+evalJobs :: ReleaseExprLang -> BuildInputs -> FilePath -> IO EvalResult
+evalJobs lang inputInfo nixExprPath = do
+  let gcRootsDir = Nothing -- fixme: config environment
+  res <- evaluateReleaseExpr lang gcRootsDir nixExprPath inputInfo
+  case res of
+    Left err -> fail err
+    Right jobs | any T.null (M.keys jobs) -> return jobs
+               | otherwise -> fail "Jobset contains a job with an empty name. Make sure the jobset evaluates to an attrset of jobs."
+
+-- | The list of (job name, build info) pairs to build.
+buildSchedule :: EvalResult -> IO [(Text, JobEvalResult)]
+buildSchedule jobs = shuffleM $ uniq [(name, job) | (name, Right job) <- M.assocs jobs]
   where
-    doCheck = evaluateJobset p j
-    updateJobset :: Either IOException Evaluation -> IO ()
-    updateJobset (Right _) = return () -- update jobsets lastcheckedtime = now(), err = ""
-    updateJobset (Left e) = return () -- update jobsets errormsg = show e, errortime = now()
+    uniq = nubBy (\a b -> nfo a == nfo b) -- fixme: n^2
+    nfo (name, job) = (name, snd <$> firstOutput (evalResultOutputs job))
 
+createBuilds :: JobsetInfo -> EvalResult -> JobsetSource -> BuildInputs -> Text -> NominalDiffTime -> NominalDiffTime -> Connection -> IO ()
+createBuilds js jobs src buildInputs argsHash checkoutTime evalTime conn = withTransaction conn $ do
+  prev <- getPrevJobsetEval True (jobsetInfoId js) conn
+  prevSize <- case prev of
+    Just eval -> fmap fromIntegral . headMay <$> (runQuery conn (countEvalMembers eval) :: IO [Int64])
+    Nothing -> return Nothing
 
-data FetchInput = FetchInput
+  -- Clear the "current" flag on all builds.  Since we're in a
+  -- transaction this will only become visible after the new
+  -- current builds have been added.
+  setBuildsCurrent False js conn
 
-fetchInput :: BuildInput -> IO FetchInput
-fetchInput (BuildInputGit uri depth branch) = do
-  res <- fetchInputGit uri depth branch
-  return FetchInput
-fetchInput (BuildInputNix expr) = return FetchInput
-fetchInput (BuildInputValue val) = return FetchInput
-fetchInput (BuildInputPreviousBuild p j n v) = fetchInputBuild p j n v
-fetchInput (BuildInputPreviousEvaluation p j n v) = fetchInputEvaluation p j n v
+  -- Schedule each successfully evaluated job.
+  jobs' <- buildSchedule jobs
+  results <- mapM (checkBuild conn js src prev) jobs'
+  now <- getPOSIXTime
 
+  let jobsetChanged = any (\(_, (new, _, _)) -> new) results || maybe True (/= length results) prevSize
+      ev = Jobseteval
+           { jobsetevalId           = Nothing
+           , jobsetevalProject      = pgStrictText $ githubRepoName (infoRepo js) -- fixme: util func
+           , jobsetevalJobsetId     = pgInt4 $ (fromIntegral $ jobsetInfoId js)
+           , jobsetevalTimestamp    = pgInt4 $ fromIntegral . floor $ now
+           , jobsetevalCheckouttime = pgInt4 $ fromIntegral . floor $ checkoutTime
+           , jobsetevalEvaltime     = pgInt4 $ fromIntegral . floor $ evalTime
+           , jobsetevalHasnewbuilds = pgInt4 $ if jobsetChanged then 1 else 0
+           , jobsetevalHash         = pgStrictText argsHash
+           , jobsetevalNrbuilds     = toNullable . pgInt4 <$> if jobsetChanged then Just (length results) else Nothing
+           , jobsetevalNrsucceeded  = Nothing
+           } :: JobsetevalWriteColumns
 
+  [evId] <- runInsertManyReturning conn jobsetevalTable [ev] jobsetevalId :: IO [Int32]
+
+  if jobsetChanged
+    then do
+      let
+        members = [ Jobsetevalmember evId buildId (if new then 1 else 0 :: Int)
+                  | (buildId, (new, _, _)) <- results ]
+        -- fixme: figure out where this input info comes from exactly
+        -- fixme: hydra-eval-jobset supports multiple names
+        inputs = [ Jobsetevalinput
+                   { jobsetevalinputEval       = constant evId
+                   , jobsetevalinputName       = pgStrictText name
+                   , jobsetevalinputAltnr      = 0
+                   , jobsetevalinputType       = pgStrictText . inputSpecType . buildInputSpec $ input
+                   , jobsetevalinputUri        = Just . toNullable . pgStrictText . T.pack . show . inputSpecUri . buildInputSpec $ input
+                   , jobsetevalinputRevision   = Just (maybeToNullable (pgStrictText <$> buildInputRev input))
+                   , jobsetevalinputValue      = Just . toNullable . pgStrictText . inputSpecValue . buildInputSpec $ input
+                   , jobsetevalinputDependency = Nothing --  :: Maybe (Maybe Int) -- fixme: "$input->{id}"
+                   , jobsetevalinputPath       = toNullable . pgStrictText . T.pack <$> buildInputStorePath input
+                   , jobsetevalinputSha256Hash = Just (maybeToNullable (pgStrictText <$> buildInputHash input))
+                   } | (name, input) <- M.assocs buildInputs ] :: [JobsetevalinputWriteColumns]
+
+        -- Create AggregateConstituents mappings.  Since there can
+        -- be jobs that alias each other, if there are multiple
+        -- builds for the same derivation, pick the one with the
+        -- shortest name.
+        -- fixme: untangle the perl and insert aggregateconstituents rows
+        ag = []
+
+      void $ runInsertMany conn jobsetevalmemberTable (map constant members)
+      void $ runInsertMany conn Hydra.aggregateconstituentTable ag
+      void $ runInsertMany conn jobsetevalinputTable inputs
+
+      sayErrString $ "  Created new eval " <> show evId
+      setBuildsCurrent True js conn -- fixme: check if same as $ev->builds->update({iscurrent => 1});
+
+    else do
+      sayErrString $ "  created cached eval " <> show evId
+      case prev of
+        -- fixme: this is probably not updating the correct build
+        Just eval -> setBuildsCurrent True js conn
+        Nothing -> return ()
+
+  -- wake up hydra-queue-runner
+  case minimumMay [id | (id, (True, _, _)) <- results] of
+    Just lowestId -> return () -- someTrigger "notifyAdded" lowestId
+    Nothing -> return ()
+
+  updateJobsetCheckTime (jobsetInfoId js) conn
+
+type PathMap = Map Text FilePath -- fixme: not sure what it is yet
+
+firstOutput :: Map Text Text -> Maybe (Text, Text)
+firstOutput outputs = minimumByMay (comparing fst) (M.assocs outputs)
+
+-- | This is called checkBuild in perl but it actually inserts rows.
+-- Check whether to add the build described by $buildInfo.
+checkBuild :: Connection -> JobsetInfo -> JobsetSource -> Maybe Jobseteval
+           -> (AttrPath, JobEvalResult)
+           -> IO (Int, (Bool, Text, FilePath))
+checkBuild conn js src prevEval (jobName, buildInfo) = do
+  putStrLn $ "considering job $project->name:" <> T.unpack (jobsetInfoKey js)
+
+  -- In various checks we can use an arbitrary output (the first)
+  -- rather than all outputs, since if one output is the same, the
+  -- others will be as well.
+  case firstOutput (evalResultOutputs buildInfo) of
+    Just (firstOutputName, firstOutputPath) -> withTransaction conn $ do
+      job <- getOrCreateJob conn js jobName
+
+      -- Don't add a build that has already been scheduled for this
+      -- job, or has been built but is still a "current" build for
+      -- this job.  Note that this means that if the sources of a job
+      -- are changed from A to B and then reverted to A, three builds
+      -- will be performed (though the last one will probably use the
+      -- cached result from the first).  This ensures that the builds
+      -- with the highest ID will always be the ones that we want in
+      -- the channels.  FIXME: Checking the output paths doesn't take
+      -- meta-attributes into account.  For instance, do we want a
+      -- new build to be scheduled if the meta.maintainers field is
+      -- changed?
+      prevBuildId <- case prevEval of
+        Just eval -> do
+          -- let jobsetName = "$jobset->name"
+          -- let projectName = "$jobset->project->name"
+          listToMaybe <$> runQuery conn (prevBuildIdQuery jobName eval firstOutputName firstOutputPath)
+        Nothing -> return Nothing
+
+      case prevBuildId of
+        Just buildId -> return (buildId, (False, jobName, evalResultDrvPath buildInfo))
+        Nothing -> do
+          now <- getPOSIXTime
+          let build = makeBuild jobName now buildInfo src js
+          [buildId] <- runInsertManyReturning conn Hydra.buildTable [build] Hydra.buildId
+          let buildOutputs = [ Hydra.Buildoutput buildId name (evalResultOutputs buildInfo ! name)
+                             | name <- sort (M.keys (evalResultOutputs buildInfo)) ]
+          _ <- runInsertMany conn Hydra.buildoutputTable (map constant buildOutputs)
+          return (buildId, (True, jobName, evalResultDrvPath buildInfo))
+
+    Nothing -> fail "job has no outputs"
+
+getOrCreateJob :: Connection -> JobsetInfo -> AttrPath -> IO ()
+getOrCreateJob conn js name = withTransaction conn $ do
+  let job = Job (jobsetInfoId js) name
+  [exists] <- runQuery conn (jobExists job) :: IO [Int64]
+  when (exists == 0) $ void $ runInsertMany conn jobTable [constant job]
+
+-- fixme: how does this link to eval?
+makeBuild :: Text -> POSIXTime -> JobEvalResult -> JobsetSource -> JobsetInfo -> Hydra.BuildWriteColumns
+makeBuild jobName time JobEvalResult{..} (JobsetSource nixExprPath _ spec) js = Hydra.Build
+  { buildId             = Nothing
+  , buildFinished       = 0
+  , buildTimestamp      = pgInt4 . fromIntegral . floor $ time
+  , buildProject        = pgStrictText $ jobsetInfoProject js
+  , buildJobset         = pgStrictText $ githubBranchName (infoBranch js)
+  , buildJob            = pgStrictText $ jobName
+  , buildNixname        = Just . toNullable . pgStrictText $ evalResultNixName
+  , buildDescription    = Just . toNullable . pgStrictText $ evalResultDescription
+  , buildDrvpath        = pgStrictText $ T.pack evalResultDrvPath
+  , buildSystem         = pgStrictText $ evalResultSystem
+  , buildLicense        = Just . toNullable . pgStrictText . buildItemList $ evalResultLicense
+  , buildHomepage       = Just . toNullable . pgStrictText . buildItemList $ evalResultHomepage
+  , buildMaintainers    = Just . toNullable . pgStrictText . buildItemList $ evalResultMaintainers
+  , buildMaxsilent      = Just . toNullable . fromIntegral $ evalResultMaxSilent
+  , buildTimeout        = Just . toNullable . fromIntegral $ evalResultTimeout
+  , buildIschannel      = if evalResultIsChannel then 1 else 0
+  , buildIscurrent      = Just (toNullable 1)
+  , buildNixexprinput   = Just (toNullable "fixme is the input name required?")
+  , buildNixexprpath    = Just . toNullable . pgStrictText . T.pack $ nixExprPath
+  , buildPriority       = fromIntegral evalResultSchedulingPriority
+  , buildGlobalpriority = 0
+  , buildStarttime      = Nothing
+  , buildStoptime       = Nothing
+  , buildIscachedbuild  = Just (toNullable 0)
+  , buildBuildstatus    = Nothing
+  , buildSize           = Nothing
+  , buildClosuresize    = Nothing
+  , buildReleasename    = Nothing
+  , buildKeep           = 3
+  }
+
+buildItemList :: [Text] -> Text
+buildItemList = T.intercalate ", " -- fixme: check
+
+setBuildsCurrent :: Bool -> JobsetInfo -> Connection -> IO ()
+setBuildsCurrent current js c = void $ runUpdate c Hydra.buildTable update pred
+  where
+    -- fixme: how to update?
+    update b = undefined { Hydra.buildIscurrent = (Just . toNullable . pgInt4 $ v) }
+    pred b = Hydra.buildJobset b .== pgStrictText (githubBranchName (infoBranch js))
+             .&& Hydra.buildProject b .== pgStrictText (jobsetInfoProject js)
+             .&& Hydra.buildIscurrent b .== toNullable (pgInt4 1)
+    v = if current then 1 else 0
+
+setBuildsCurrentId :: Bool -> JobsetId -> Connection -> IO ()
+setBuildsCurrentId current js c = void $ runUpdate c Hydra.buildTable update pred
+  where
+    -- fixme: how to update?
+    update b = undefined { Hydra.buildIscurrent = (Just . toNullable . pgInt4 $ v) }
+    pred b = Hydra.buildJobset b .== undefined -- fixme: pgInt4 jsId
+    v = if current then 1 else 0
+
+data JobsetSource = JobsetSource
+  { srcNixStorePath :: NixStorePath
+  , srcNixStoreHash :: NixStoreHash
+  , srcBuildSpec    :: BuildSpec
+  } deriving (Show, Eq)
+
+fetchJobsetSource :: GithubRepo -> GithubBranch -> App JobsetSource
+fetchJobsetSource repo branch = undefined
+
+-- | Find previous evaluation and its number of builds
+getPrevJobsetEval :: Bool -> JobsetId -> Connection -> IO (Maybe Jobseteval)
+getPrevJobsetEval hasNewBuilds js conn = listToMaybe <$> runQuery conn (prevJobsetEvalQuery hasNewBuilds js)
+
+-- Hash the arguments to hydra-eval-jobs and check the
+-- JobsetInputHashes to see if the previous evaluation had the same
+-- inputs.
+type Evaluation  = Jobseteval
+checkUnchanged :: JobsetId -> Text -> App (Maybe Evaluation)
+checkUnchanged js argsHash = do
+  prev <- withHerculesConnection (getPrevJobsetEval False js)
+  return $ if isUnchanged prev then prev else Nothing
+  where
+    isUnchanged = maybe False ((== argsHash) . jobsetevalHash)
+
+checkJobset :: ProjectName -> JobsetName -> App Bool
+checkJobset p j = do
+  res <- withHerculesConnection $ lookupBranch p j
+  case res of
+    Just (repo, branch) -> do
+      case jobsetInfo repo branch of
+        Just js -> checkJobset' js
+        Nothing -> do
+          sayErr $ "specified jobset \"" <> p <> ":" <> j <> "\" is not enabled"
+          return False
+    Nothing -> do
+      sayErr $ "specified jobset \"" <> p <> ":" <> j <> "\" does not exist"
+      return False
+
+checkJobset' :: JobsetInfo -> App Bool
+checkJobset' js = do
+  jsId <- withHerculesConnection $ getOrCreateJobset js
+  res <- try (evaluateJobset js)
+  case res of
+    Left (err :: IOException) -> do
+      sayErrString $ "problem evaluating jobset " ++ show err
+      updateJobsetError (T.pack $ show err) (jobsetInfoId js)
+      return False
+    Right ev -> do
+      withHerculesConnection $ updateJobsetCheckTime jsId
+      return True
+
+findJobsetOld :: ProjectName -> JobsetName -> App (Maybe (Jobset, GithubBranch, GithubRepo))
+findJobsetOld p j = runHerculesQueryWithConnectionSingular (findJobsetQueryOld p j)
+
+-- | Jobset info for a branch.
+-- Returns Nothing if disabled or spec missing.
+jobsetInfo :: GithubRepo -> GithubBranch -> Maybe JobsetInfo
+jobsetInfo repo branch = JobsetInfo repo branch <$> spec
+  where spec | githubRepoEnabled repo = branchBuildSpec branch
+             | otherwise = Nothing
+
+lookupBranch :: ProjectName -> JobsetName -> Connection -> IO (Maybe (GithubRepo, GithubBranch))
+lookupBranch p j conn = listToMaybe <$> runQuery conn (findJobsetQuery p j)
+
+getOrCreateJobset :: JobsetInfo -> Connection -> IO JobsetId
+getOrCreateJobset js conn = withTransaction conn $ do
+  let jsId = jobsetInfoId js
+      jobset = Jobset (pgInt4 (fromIntegral jsId)) Nothing Nothing Nothing Nothing Nothing Nothing :: JobsetWriteColumns
+  [prev] <- runQuery conn (countRows $ jobsetByIdQuery (fromIntegral jsId)) :: IO [Int64]
+  when (prev == 0) . void $
+    runInsertMany conn jobsetTable [jobset]
+  return jsId
+
+updateJobsetError :: Text -> JobsetId -> App ()
+updateJobsetError err js = do
+  now <- liftIO getCurrentTime
+  void $ runUpdateWithConnection jobsetTable (updates now) (jobsetRestriction js)
+  where
+    -- fixme: looks rather awful
+    updates now _ = Jobset (pgInt4 (fromIntegral js))
+                    (Just . toNullable . pgStrictText $ err) -- error message
+                    (Just . toNullable $ pgUTCTime now) -- error time
+                    (Just . toNullable $ pgUTCTime now) -- last checked time
+                    Nothing     -- trigger time
+                    (Just null) -- fetch error message
+                    Nothing     -- start time
+
+updateJobsetCheckTime :: JobsetId -> Connection -> IO ()
+updateJobsetCheckTime js conn = do
+  now <- getCurrentTime
+  void $ runUpdate conn jobsetTable (updates now) (jobsetRestriction js)
+  where
+    updates now _ = Jobset (pgInt4 (fromIntegral js))
+                    Nothing Nothing
+                    (Just . toNullable $ pgUTCTime now)
+                    Nothing (Just null) Nothing
+
+fetchInputs :: Text -> Text -> Map Text InputSpec -> App BuildInputs
+fetchInputs p j inputs = M.fromList . (zip (M.keys inputs)) <$> rs inputs
+  where
+    rs :: Map Text InputSpec -> App [BuildInput]
+    rs = mapM (fetchInput p j) . M.elems
+
+fetchInput :: Text -> Text -> InputSpec -> App BuildInput
+fetchInput _ _ s@(InputSpecGit uri depth branch) = do
+  res <- liftIO $ fetchInputGit uri depth branch
+  return $ BuildInputGit s (fetchGitStorePath res) (fetchGitSHA256Hash res) M.empty -- fixme: include full fetchinputgit result
+fetchInput _ _ s@(InputSpecNix _) = return $ BuildInputValue s
+fetchInput _ _ s@(InputSpecValue _) = return $ BuildInputValue s
+fetchInput p j s@(InputSpecPreviousBuild _) = fetchInputBuild s p j
+fetchInput _ _ s@(InputSpecPreviousEvaluation v) = fetchInputEvaluation s v
 
 -- fixme: implement
-fetchInputBuild :: Text -> Text -> Text -> Text -> IO FetchInput
-fetchInputBuild project jobset name value = return FetchInput
+fetchInputBuild :: InputSpec -> Text -> Text -> App BuildInput
+fetchInputBuild i projectName jobsetName = return $ BuildInputPreviousBuild i "" "" -- fixme: placeholder
 
 -- fixme: implement
-fetchInputEvaluation :: Text -> Text -> Text -> Text -> IO FetchInput
-fetchInputEvaluation project jobset name value = return FetchInput
+fetchInputEvaluation :: InputSpec -> Text -> App BuildInput
+fetchInputEvaluation i value = return $ BuildInputPreviousEvaluation i M.empty -- fixme: placeholder

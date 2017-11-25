@@ -26,10 +26,11 @@ library
                        Hercules.Database.Hercules.Migration
                        Hercules.Database.Hydra
                        Hercules.Encryption
-                       Hercules.Evaluate.Spec
+                       Hercules.Evaluate.Fetch
                        Hercules.Evaluate.Jobset
                        Hercules.Evaluate.ReleaseExpr
                        Hercules.Evaluate.Service
+                       Hercules.Evaluate.Spec
                        Hercules.Evaluate.Types
                        Hercules.Input.Git
                        Hercules.Input.NixHelper
@@ -46,6 +47,7 @@ library
                        Hercules.ServerEnv
                        Hercules.Static
                        Hercules.Swagger
+                       Hercules.Util
                        Network.URI.Extra
                        Nix.Store
                        Opaleye.Extra
@@ -70,6 +72,7 @@ library
                      , interpolatedstring-perl6
                      , jose
                      , lens
+                     , lifted-base
                      , logging-effect
                      , markdown
                      , memory
@@ -81,6 +84,7 @@ library
                      , postgresql-simple-migration
                      , product-profunctors
                      , profunctors
+                     , random-shuffle
                      , regex-pcre
                      , resource-pool
                      , safe
@@ -95,6 +99,7 @@ library
                      , servant-server
                      , text
                      , time
+                     , transformers-base
                      , typed-process
                      , vector
                      , wai
@@ -124,7 +129,9 @@ executable hydra-eval-jobset
   build-depends:       base
                      , hercules
                      , bytestring
+                     , mtl
                      , text
+                     , yaml
   default-language:    Haskell2010
 
 executable gen-elm

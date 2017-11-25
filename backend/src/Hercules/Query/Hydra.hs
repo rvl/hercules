@@ -10,6 +10,8 @@ module Hercules.Query.Hydra
   , projectQuery
   , projectsQuery
   , projectsWithJobsetsQuery
+  , prevBuildIdQuery
+  , countEvalMembers
   ) where
 
 import Control.Arrow (returnA)
@@ -17,6 +19,7 @@ import Data.Text
 import Opaleye
 
 import Hercules.Database.Hydra
+import Hercules.Database.Hercules
 
 -- | A query to get a list of all the project names
 projectNameQuery :: Query (Column PGText)
@@ -44,4 +47,29 @@ projectsWithJobsetsQuery
   :: Query (ProjectReadColumns, JobsetNullableColumns)
 projectsWithJobsetsQuery = leftJoin projectsQuery jobsetsQuery eqName
   where
-    eqName (Project{..}, Jobset{..}) = projectName .== jobsetProject
+    eqName (Project{..}, Jobset{..}) = projectName .== pgString "" -- fixme: jobsetProject
+
+-- | Find a previous build by looking for a build output
+prevBuildIdQuery :: Text -> Jobseteval -> Text -> Text -> Query (Column PGInt4)
+prevBuildIdQuery jobName prevEval outputName outputPath = limit 1 $ proc () -> do
+  b <- queryTable buildTable -< ()
+  m <- queryTable jobsetevalmemberTable -< ()
+  o <- queryTable buildoutputTable -< ()
+
+  restrict -< jobsetevalmemberEval m .== constant (jobsetevalId prevEval)
+  restrict -< buildJob b .== constant jobName
+  restrict -< buildoutputName o .== pgStrictText outputName
+  restrict -< buildoutputPath o .== pgStrictText outputPath
+
+  -- hydra-eval-jobset.pl has note about extra constraints
+  -- making query faster. todo: add column indices
+  -- restrict -< Hydra.buildProject b .== projectName
+  -- restrict -< Hydra.buildJobset b .== jobsetName
+
+  returnA -< buildId b
+
+countEvalMembers :: Jobseteval -> Query (Column PGInt8)
+countEvalMembers eval = countRows $ proc () -> do
+  m <- queryTable jobsetevalmemberTable -< ()
+  restrict -< jobsetevalmemberEval m .== constant (jobsetevalId eval)
+  returnA -< m

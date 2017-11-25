@@ -5,6 +5,8 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StrictData                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Hercules.ServerEnv
   ( Env(..)
@@ -14,6 +16,8 @@ module Hercules.ServerEnv
   , newEnv
   , runHerculesQueryWithConnection
   , runHerculesQueryWithConnectionSingular
+  , runUpdateReturningWithConnection
+  , runUpdateWithConnection
   , runHydraQueryWithConnection
   , withHerculesConnection
   , withHttpManager
@@ -21,9 +25,14 @@ module Hercules.ServerEnv
   , makeUserJWT
   , getHostAndPort
   , HerculesCipher
+  , liftIO
+  , Connection
+  , withTransaction
   ) where
 
 import Control.Monad.Except.Extra
+import Control.Monad.Trans.Control
+import Control.Monad.Base
 import Control.Monad.Log
 import Control.Monad.Reader
 import Crypto.Cipher.AES
@@ -33,6 +42,7 @@ import Crypto.JOSE.Error
 import Crypto.Random.Entropy
 import Data.ByteString.Extra           as BS (readFileMaybe, writeFile, ByteString)
 import Data.ByteString.Lazy            (toStrict)
+import Data.Int                        (Int64)
 import Data.List                       (find)
 import Data.Maybe                      (fromMaybe)
 import Data.Pool
@@ -43,11 +53,12 @@ import Data.Text                       (Text, pack)
 import Data.Text.Encoding              (encodeUtf8)
 import Data.Time.Format
 import Data.Yaml
-import Database.PostgreSQL.Simple      (Connection, close, connectPostgreSQL)
+import Database.PostgreSQL.Simple      (Connection, close, connectPostgreSQL, withTransaction)
 import Network.HTTP.Client             as HTTP
 import Network.HTTP.Client.TLS
 import Opaleye                         (Query, QueryRunner, Unpackspec,
-                                        runQuery, showSql)
+                                        Table, Column, PGBool,
+                                        runQuery, runUpdateReturning, runUpdate, showSql)
 import Say
 import Servant                         (ServantErr)
 import Servant.Auth.Server             (JWTSettings, defaultJWTSettings,
@@ -86,9 +97,20 @@ newtype App a = App
            , Monad
            , MonadError ServantErr
            , MonadIO
+           , MonadBase IO
            , MonadLog (WithSeverity LogMessage)
            , MonadReader Env
            )
+
+instance MonadBaseControl IO App where
+  type StM App a = a
+  liftBaseWith f = App $ liftBaseWith $ \runInBase -> f (helpMeImConfused . runInBase . unApp)
+  restoreM = App . restoreM . restoreM
+
+helpMeImConfused :: IO (Either ServantErr a) -> IO a
+helpMeImConfused action = action >>= \case
+  Right a -> return a
+  Left err -> fail $ "oh bugger, ServantErr: " ++ show err
 
 -- | Perform an action with a PostgreSQL connection to the Hercules DB and
 -- return the result
@@ -126,6 +148,24 @@ runHerculesQueryWithConnection
 runHerculesQueryWithConnection q = do
   logQuery q
   withHerculesConnection (\c -> runQuery c q)
+
+runUpdateReturningWithConnection
+  :: Default QueryRunner columnsReturned haskells
+  => Table columnsW columnsR
+  -> (columnsR -> columnsW)
+  -> (columnsR -> Column PGBool)
+  -> (columnsR -> columnsReturned)
+  -> App [haskells]
+runUpdateReturningWithConnection t u p f =
+  withHerculesConnection (\c -> runUpdateReturning c t u p f)
+
+runUpdateWithConnection
+  :: Table columnsW columnsR
+  -> (columnsR -> columnsW)
+  -> (columnsR -> Column PGBool)
+  -> App Int64
+runUpdateWithConnection t u p =
+  withHerculesConnection (\c -> runUpdate c t u p)
 
 -- | Evaluate a query in an 'App' value returning a singular result
 runHerculesQueryWithConnectionSingular

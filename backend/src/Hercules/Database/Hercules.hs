@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE DeriveGeneric         #-}
 
 module Hercules.Database.Hercules where
 
@@ -13,6 +14,11 @@ import Data.Profunctor.Product.TH      (makeAdaptorAndInstance)
 import Data.Text
 import GHC.Int
 import Opaleye                         hiding (fromNullable)
+import qualified Data.Aeson as JSON
+import Data.Time.Clock (UTCTime)
+import           Servant.Elm
+import           Data.Aeson
+import           GHC.Generics
 
 -- | A newtype around @a -> Maybe b@ to facilitate conversions from the
 -- Nullable types.
@@ -66,7 +72,7 @@ fromNullableUser = fromNullable
 $(makeAdaptorAndInstance "pUser" ''User')
 
 userTable :: Table UserWriteColumns UserReadColumns
-userTable = Table "users" (pUser
+userTable = TableWithSchema "hercules" "users" (pUser
   User
     { userId = optional "id"
     , userName = optional "name"
@@ -76,3 +82,494 @@ userTable = Table "users" (pUser
     }
   )
 
+---- Types for table: github_branches ----
+
+data GithubBranch' c1 c2 c3 c4 c5 c6 =
+  GithubBranch
+    { githubBranchId :: c1
+    , githubBranchRepoId :: c2
+    , githubBranchName :: c3
+    , githubBranchRev :: c4
+    , githubBranchSpec :: c5
+    , githubBranchPullRequestNumber :: c6
+    }
+
+type GithubBranch = GithubBranch' Int32 Int32 Text Text JSON.Value (Maybe Int32)
+
+type GithubBranchReadColumns = GithubBranch' (Column PGInt4) (Column PGInt4) (Column PGText) (Column PGText) (Column PGJsonb) (Column (Nullable PGInt4))
+
+type GithubBranchWriteColumns = GithubBranch' (Maybe (Column PGInt4)) (Column PGInt4) (Column PGText) (Column PGText) (Column PGJsonb) (Maybe (Column (Nullable PGInt4)))
+
+type GithubBranchNullableColumns = GithubBranch' (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGJsonb)) (Column (Nullable PGInt4))
+
+type GithubBranchNullable = GithubBranch' (Maybe Int32) (Maybe Int32) (Maybe Text) (Maybe Text) (Maybe JSON.Value) (Maybe Int32)
+
+fromNullableGithubBranch :: GithubBranchNullable -> Maybe GithubBranch
+fromNullableGithubBranch = fromNullable
+
+$(makeAdaptorAndInstance "pGithubBranch" ''GithubBranch')
+
+githubBranchTable :: Table GithubBranchWriteColumns GithubBranchReadColumns
+githubBranchTable = TableWithSchema "hercules" "github_branches" (pGithubBranch
+  GithubBranch
+    { githubBranchId = optional "id"
+    , githubBranchRepoId = required "repo_id"
+    , githubBranchName = required "name"
+    , githubBranchRev = required "rev"
+    , githubBranchSpec = required "spec"
+    , githubBranchPullRequestNumber = optional "pull_request_number"
+    }
+  )
+
+---- Types for table: github_pull_requests ----
+
+data GithubPullRequest' c1 c2 c3 =
+  GithubPullRequest
+    { githubPullRequestNumber :: c1
+    , githubPullRequestRepoId :: c2
+    , githubPullRequestTitle :: c3
+    }
+
+type GithubPullRequest = GithubPullRequest' Int32 Int32 Text
+
+type GithubPullRequestReadColumns = GithubPullRequest' (Column PGInt4) (Column PGInt4) (Column PGText)
+
+type GithubPullRequestWriteColumns = GithubPullRequest' (Column PGInt4) (Column PGInt4) (Column PGText)
+
+type GithubPullRequestNullableColumns = GithubPullRequest' (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText))
+
+type GithubPullRequestNullable = GithubPullRequest' (Maybe Int32) (Maybe Int32) (Maybe Text)
+
+fromNullableGithubPullRequest :: GithubPullRequestNullable -> Maybe GithubPullRequest
+fromNullableGithubPullRequest = fromNullable
+
+$(makeAdaptorAndInstance "pGithubPullRequest" ''GithubPullRequest')
+
+githubPullRequestTable :: Table GithubPullRequestWriteColumns GithubPullRequestReadColumns
+githubPullRequestTable = TableWithSchema "hercules" "github_pull_requests" (pGithubPullRequest
+  GithubPullRequest
+    { githubPullRequestNumber = required "number"
+    , githubPullRequestRepoId = required "repo_id"
+    , githubPullRequestTitle = required "title"
+    }
+  )
+
+---- Types for table: github_repo_cache ----
+
+data GithubRepoCache' c1 c2 c3 c4 =
+  GithubRepoCache
+    { githubRepoCacheRepoId :: c1
+    , githubRepoCachePath :: c2
+    , githubRepoCacheStartFetch :: c3
+    , githubRepoCacheLastFetch :: c4
+    }
+
+type GithubRepoCache = GithubRepoCache' Int32 Text (Maybe UTCTime) (Maybe UTCTime)
+
+type GithubRepoCacheReadColumns = GithubRepoCache' (Column PGInt4) (Column PGText) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz))
+
+type GithubRepoCacheWriteColumns = GithubRepoCache' (Column PGInt4) (Column PGText) (Maybe (Column (Nullable PGTimestamptz))) (Maybe (Column (Nullable PGTimestamptz)))
+
+type GithubRepoCacheNullableColumns = GithubRepoCache' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz))
+
+type GithubRepoCacheNullable = GithubRepoCache' (Maybe Int32) (Maybe Text) (Maybe UTCTime) (Maybe UTCTime)
+
+fromNullableGithubRepoCache :: GithubRepoCacheNullable -> Maybe GithubRepoCache
+fromNullableGithubRepoCache = fromNullable
+
+$(makeAdaptorAndInstance "pGithubRepoCache" ''GithubRepoCache')
+
+githubRepoCacheTable :: Table GithubRepoCacheWriteColumns GithubRepoCacheReadColumns
+githubRepoCacheTable = TableWithSchema "hercules" "github_repo_cache" (pGithubRepoCache
+  GithubRepoCache
+    { githubRepoCacheRepoId = required "repo_id"
+    , githubRepoCachePath = required "path"
+    , githubRepoCacheStartFetch = optional "start_fetch"
+    , githubRepoCacheLastFetch = optional "last_fetch"
+    }
+  )
+
+---- Types for table: github_repos ----
+
+data GithubRepo' c1 c2 c3 c4 c5 c6 =
+  GithubRepo
+    { githubRepoId :: c1
+    , githubRepoName :: c2
+    , githubRepoFullName :: c3
+    , githubRepoDefaultBranch :: c4
+    , githubRepoRemoteUri :: c5
+    , githubRepoEnabled :: c6
+    }
+
+type GithubRepo = GithubRepo' Int32 Text Text Text Text Bool
+
+type GithubRepoReadColumns = GithubRepo' (Column PGInt4) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
+
+type GithubRepoWriteColumns = GithubRepo' (Maybe (Column PGInt4)) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
+
+type GithubRepoNullableColumns = GithubRepo' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGBool))
+
+type GithubRepoNullable = GithubRepo' (Maybe Int32) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Bool)
+
+fromNullableGithubRepo :: GithubRepoNullable -> Maybe GithubRepo
+fromNullableGithubRepo = fromNullable
+
+$(makeAdaptorAndInstance "pGithubRepo" ''GithubRepo')
+
+githubRepoTable :: Table GithubRepoWriteColumns GithubRepoReadColumns
+githubRepoTable = TableWithSchema "hercules" "github_repos" (pGithubRepo
+  GithubRepo
+    { githubRepoId = optional "id"
+    , githubRepoName = required "name"
+    , githubRepoFullName = required "full_name"
+    , githubRepoDefaultBranch = required "default_branch"
+    , githubRepoRemoteUri = required "remote_uri"
+    , githubRepoEnabled = required "enabled"
+    }
+  )
+
+---- Types for table: jobs ----
+
+data Job' c1 c2 =
+  Job
+    { jobJobsetId :: c1
+    , jobName :: c2
+    }
+
+type Job = Job' Int32 Text
+
+type JobReadColumns = Job' (Column PGInt4) (Column PGText)
+
+type JobWriteColumns = Job' (Column PGInt4) (Column PGText)
+
+type JobNullableColumns = Job' (Column (Nullable PGInt4)) (Column (Nullable PGText))
+
+type JobNullable = Job' (Maybe Int32) (Maybe Text)
+
+fromNullableJob :: JobNullable -> Maybe Job
+fromNullableJob = fromNullable
+
+$(makeAdaptorAndInstance "pJob" ''Job')
+
+jobTable :: Table JobWriteColumns JobReadColumns
+jobTable = TableWithSchema "hercules" "jobs" (pJob
+  Job
+    { jobJobsetId = required "jobset_id"
+    , jobName = required "name"
+    }
+  )
+
+---- Types for table: jobsets ----
+
+data Jobset' c1 c2 c3 c4 c5 c6 c7 =
+  Jobset
+    { jobsetBranchId :: c1
+    , jobsetErrormsg :: c2
+    , jobsetErrortime :: c3
+    , jobsetLastcheckedtime :: c4
+    , jobsetTriggertime :: c5
+    , jobsetFetcherrormsg :: c6
+    , jobsetStarttime :: c7
+    } deriving (Generic)
+
+type JobsetId = Int32 -- fixme: newtypes for ids
+
+type Jobset = Jobset' JobsetId (Maybe Text) (Maybe UTCTime) (Maybe UTCTime) (Maybe UTCTime) (Maybe Text) (Maybe UTCTime)
+
+type JobsetReadColumns = Jobset' (Column PGInt4) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz))
+
+type JobsetWriteColumns = Jobset' (Column PGInt4) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGTimestamptz))) (Maybe (Column (Nullable PGTimestamptz))) (Maybe (Column (Nullable PGTimestamptz))) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGTimestamptz)))
+
+type JobsetNullableColumns = Jobset' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz))
+
+type JobsetNullable = Jobset' (Maybe Int32) (Maybe Text) (Maybe UTCTime) (Maybe UTCTime) (Maybe UTCTime) (Maybe Text) (Maybe UTCTime)
+
+fromNullableJobset :: JobsetNullable -> Maybe Jobset
+fromNullableJobset = fromNullable
+
+$(makeAdaptorAndInstance "pJobset" ''Jobset')
+
+jobsetTable :: Table JobsetWriteColumns JobsetReadColumns
+jobsetTable = TableWithSchema "hercules" "jobsets" (pJobset
+  Jobset
+    { jobsetBranchId = required "branch_id"
+    , jobsetErrormsg = optional "errormsg"
+    , jobsetErrortime = optional "errortime"
+    , jobsetLastcheckedtime = optional "lastcheckedtime"
+    , jobsetTriggertime = optional "triggertime"
+    , jobsetFetcherrormsg = optional "fetcherrormsg"
+    , jobsetStarttime = optional "starttime"
+    }
+  )
+
+instance ToJSON Jobset where
+instance ElmType Jobset where
+
+---- Types for table: sources ----
+
+data Source' c1 c2 c3 =
+  Source
+    { sourceBranchId :: c1
+    , sourcePath :: c2
+    , sourceSha256 :: c3
+    }
+
+type Source = Source' Int32 Text Text
+
+type SourceReadColumns = Source' (Column PGInt4) (Column PGText) (Column PGText)
+
+type SourceWriteColumns = Source' (Column PGInt4) (Column PGText) (Column PGText)
+
+type SourceNullableColumns = Source' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText))
+
+type SourceNullable = Source' (Maybe Int32) (Maybe Text) (Maybe Text)
+
+fromNullableSource :: SourceNullable -> Maybe Source
+fromNullableSource = fromNullable
+
+$(makeAdaptorAndInstance "pSource" ''Source')
+
+sourceTable :: Table SourceWriteColumns SourceReadColumns
+sourceTable = TableWithSchema "hercules" "sources" (pSource
+  Source
+    { sourceBranchId = required "branch_id"
+    , sourcePath = required "path"
+    , sourceSha256 = required "sha256"
+    }
+  )
+
+---- Types for table: jobsetevals ----
+
+data Jobseteval' c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 =
+  Jobseteval
+    { jobsetevalId           :: c1
+    , jobsetevalProject      :: c2
+    , jobsetevalJobsetId     :: c3
+    , jobsetevalTimestamp    :: c4
+    , jobsetevalCheckouttime :: c5
+    , jobsetevalEvaltime     :: c6
+    , jobsetevalHasnewbuilds :: c7
+    , jobsetevalHash         :: c8
+    , jobsetevalNrbuilds     :: c9
+    , jobsetevalNrsucceeded  :: c10
+    }
+
+type Jobseteval = Jobseteval' Int32 Text Int32 Int32 Int32 Int32 Int32 Text (Maybe Int32) (Maybe Int32)
+
+type JobsetevalReadColumns = Jobseteval' (Column PGInt4) (Column PGText) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGText) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
+
+type JobsetevalWriteColumns = Jobseteval' (Maybe (Column PGInt4)) (Column PGText) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGText) (Maybe (Column (Nullable PGInt4))) (Maybe (Column (Nullable PGInt4)))
+
+type JobsetevalNullableColumns = Jobseteval' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
+
+type JobsetevalNullable = Jobseteval' (Maybe Int32) (Maybe Text) (Maybe Int32) (Maybe Int32) (Maybe Int32) (Maybe Int32) (Maybe Int32) (Maybe Text) (Maybe Int32) (Maybe Int32)
+
+fromNullableJobseteval :: JobsetevalNullable -> Maybe Jobseteval
+fromNullableJobseteval = fromNullable
+
+$(makeAdaptorAndInstance "pJobseteval" ''Jobseteval')
+
+jobsetevalTable :: Table JobsetevalWriteColumns JobsetevalReadColumns
+jobsetevalTable = Table "jobsetevals" (pJobseteval
+  Jobseteval
+    { jobsetevalId = optional "id"
+    , jobsetevalProject = required "project"
+    , jobsetevalJobsetId = required "jobset_id"
+    , jobsetevalTimestamp = required "timestamp"
+    , jobsetevalCheckouttime = required "checkouttime"
+    , jobsetevalEvaltime = required "evaltime"
+    , jobsetevalHasnewbuilds = required "hasnewbuilds"
+    , jobsetevalHash = required "hash"
+    , jobsetevalNrbuilds = optional "nrbuilds"
+    , jobsetevalNrsucceeded = optional "nrsucceeded"
+    }
+  )
+
+---- Types for table: jobsetevalinputs ----
+
+data Jobsetevalinput' c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 =
+  Jobsetevalinput
+    { jobsetevalinputEval       :: c1
+    , jobsetevalinputName       :: c2
+    , jobsetevalinputAltnr      :: c3
+    , jobsetevalinputType       :: c4
+    , jobsetevalinputUri        :: c5
+    , jobsetevalinputRevision   :: c6
+    , jobsetevalinputValue      :: c7
+    , jobsetevalinputDependency :: c8
+    , jobsetevalinputPath       :: c9
+    , jobsetevalinputSha256Hash :: c10
+    }
+
+type Jobsetevalinput = Jobsetevalinput' Int32 Text Int32 Text (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int32) (Maybe Text) (Maybe Text)
+
+type JobsetevalinputReadColumns = Jobsetevalinput' (Column PGInt4) (Column PGText) (Column PGInt4) (Column PGText) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText))
+
+type JobsetevalinputWriteColumns = Jobsetevalinput' (Column PGInt4) (Column PGText) (Column PGInt4) (Column PGText) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGInt4))) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGText)))
+
+type JobsetevalinputNullableColumns = Jobsetevalinput' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText))
+
+type JobsetevalinputNullable = Jobsetevalinput' (Maybe Int32) (Maybe Text) (Maybe Int32) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int32) (Maybe Text) (Maybe Text)
+
+fromNullableJobsetevalinput :: JobsetevalinputNullable -> Maybe Jobsetevalinput
+fromNullableJobsetevalinput = fromNullable
+
+$(makeAdaptorAndInstance "pJobsetevalinput" ''Jobsetevalinput')
+
+jobsetevalinputTable :: Table JobsetevalinputWriteColumns JobsetevalinputReadColumns
+jobsetevalinputTable = Table "jobsetevalinputs" (pJobsetevalinput
+  Jobsetevalinput
+    { jobsetevalinputEval = required "eval"
+    , jobsetevalinputName = required "name"
+    , jobsetevalinputAltnr = required "altnr"
+    , jobsetevalinputType = required "type"
+    , jobsetevalinputUri = optional "uri"
+    , jobsetevalinputRevision = optional "revision"
+    , jobsetevalinputValue = optional "value"
+    , jobsetevalinputDependency = optional "dependency"
+    , jobsetevalinputPath = optional "path"
+    , jobsetevalinputSha256Hash = optional "sha256hash"
+    }
+  )
+
+---- Types for table: jobsetevalmembers ----
+
+data Jobsetevalmember' c1 c2 c3 =
+  Jobsetevalmember
+    { jobsetevalmemberEval  :: c1
+    , jobsetevalmemberBuild :: c2
+    , jobsetevalmemberIsnew :: c3
+    }
+
+type Jobsetevalmember = Jobsetevalmember' Int32 Int32 Int32
+
+type JobsetevalmemberReadColumns = Jobsetevalmember' (Column PGInt4) (Column PGInt4) (Column PGInt4)
+
+type JobsetevalmemberWriteColumns = Jobsetevalmember' (Column PGInt4) (Column PGInt4) (Column PGInt4)
+
+type JobsetevalmemberNullableColumns = Jobsetevalmember' (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
+
+type JobsetevalmemberNullable = Jobsetevalmember' (Maybe Int32) (Maybe Int32) (Maybe Int32)
+
+fromNullableJobsetevalmember :: JobsetevalmemberNullable -> Maybe Jobsetevalmember
+fromNullableJobsetevalmember = fromNullable
+
+$(makeAdaptorAndInstance "pJobsetevalmember" ''Jobsetevalmember')
+
+jobsetevalmemberTable :: Table JobsetevalmemberWriteColumns JobsetevalmemberReadColumns
+jobsetevalmemberTable = Table "jobsetevalmembers" (pJobsetevalmember
+  Jobsetevalmember
+    { jobsetevalmemberEval = required "eval"
+    , jobsetevalmemberBuild = required "build"
+    , jobsetevalmemberIsnew = required "isnew"
+    }
+  )
+
+---- Types for table: jobsetinputalts ----
+
+data Jobsetinputalt' c1 c2 c3 c4 c5 c6 =
+  Jobsetinputalt
+    { jobsetinputaltProject  :: c1
+    , jobsetinputaltJobset   :: c2
+    , jobsetinputaltInput    :: c3
+    , jobsetinputaltAltnr    :: c4
+    , jobsetinputaltValue    :: c5
+    , jobsetinputaltRevision :: c6
+    }
+
+type Jobsetinputalt = Jobsetinputalt' Text Text Text Int32 (Maybe Text) (Maybe Text)
+
+type JobsetinputaltReadColumns = Jobsetinputalt' (Column PGText) (Column PGText) (Column PGText) (Column PGInt4) (Column (Nullable PGText)) (Column (Nullable PGText))
+
+type JobsetinputaltWriteColumns = Jobsetinputalt' (Column PGText) (Column PGText) (Column PGText) (Column PGInt4) (Maybe (Column (Nullable PGText))) (Maybe (Column (Nullable PGText)))
+
+type JobsetinputaltNullableColumns = Jobsetinputalt' (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText))
+
+type JobsetinputaltNullable = Jobsetinputalt' (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int32) (Maybe Text) (Maybe Text)
+
+fromNullableJobsetinputalt :: JobsetinputaltNullable -> Maybe Jobsetinputalt
+fromNullableJobsetinputalt = fromNullable
+
+$(makeAdaptorAndInstance "pJobsetinputalt" ''Jobsetinputalt')
+
+jobsetinputaltTable :: Table JobsetinputaltWriteColumns JobsetinputaltReadColumns
+jobsetinputaltTable = Table "jobsetinputalts" (pJobsetinputalt
+  Jobsetinputalt
+    { jobsetinputaltProject = required "project"
+    , jobsetinputaltJobset = required "jobset"
+    , jobsetinputaltInput = required "input"
+    , jobsetinputaltAltnr = required "altnr"
+    , jobsetinputaltValue = optional "value"
+    , jobsetinputaltRevision = optional "revision"
+    }
+  )
+
+---- Types for table: jobsetinputs ----
+
+data Jobsetinput' c1 c2 c3 c4 c5 =
+  Jobsetinput
+    { jobsetinputProject          :: c1
+    , jobsetinputJobset           :: c2
+    , jobsetinputName             :: c3
+    , jobsetinputType             :: c4
+    , jobsetinputEmailresponsible :: c5
+    }
+
+type Jobsetinput = Jobsetinput' Text Text Text Text Int32
+
+type JobsetinputReadColumns = Jobsetinput' (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGInt4)
+
+type JobsetinputWriteColumns = Jobsetinput' (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGInt4)
+
+type JobsetinputNullableColumns = Jobsetinput' (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGInt4))
+
+type JobsetinputNullable = Jobsetinput' (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int32)
+
+fromNullableJobsetinput :: JobsetinputNullable -> Maybe Jobsetinput
+fromNullableJobsetinput = fromNullable
+
+$(makeAdaptorAndInstance "pJobsetinput" ''Jobsetinput')
+
+jobsetinputTable :: Table JobsetinputWriteColumns JobsetinputReadColumns
+jobsetinputTable = Table "jobsetinputs" (pJobsetinput
+  Jobsetinput
+    { jobsetinputProject = required "project"
+    , jobsetinputJobset = required "jobset"
+    , jobsetinputName = required "name"
+    , jobsetinputType = required "type"
+    , jobsetinputEmailresponsible = required "emailresponsible"
+    }
+  )
+
+---- Types for table: jobsetrenames ----
+
+data Jobsetrename' c1 c2 c3 =
+  Jobsetrename
+    { jobsetrenameProject :: c1
+    , jobsetrenameFrom    :: c2
+    , jobsetrenameTo      :: c3
+    }
+
+type Jobsetrename = Jobsetrename' Text Text Text
+
+type JobsetrenameReadColumns = Jobsetrename' (Column PGText) (Column PGText) (Column PGText)
+
+type JobsetrenameWriteColumns = Jobsetrename' (Column PGText) (Column PGText) (Column PGText)
+
+type JobsetrenameNullableColumns = Jobsetrename' (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText))
+
+type JobsetrenameNullable = Jobsetrename' (Maybe Text) (Maybe Text) (Maybe Text)
+
+fromNullableJobsetrename :: JobsetrenameNullable -> Maybe Jobsetrename
+fromNullableJobsetrename = fromNullable
+
+$(makeAdaptorAndInstance "pJobsetrename" ''Jobsetrename')
+
+jobsetrenameTable :: Table JobsetrenameWriteColumns JobsetrenameReadColumns
+jobsetrenameTable = Table "jobsetrenames" (pJobsetrename
+  Jobsetrename
+    { jobsetrenameProject = required "project"
+    , jobsetrenameFrom = required "from_"
+    , jobsetrenameTo = required "to_"
+    }
+  )

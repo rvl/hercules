@@ -20,12 +20,9 @@ import System.Lock.FLock (withLock, Block(..), SharedExclusive(..))
 import System.Exit (ExitCode(..))
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL8
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteArray.Encoding as B (Base (..), convertToBase)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Default
 import Data.Time.Clock (NominalDiffTime)
-import Crypto.Hash
 import Control.Monad
 import Text.Regex.PCRE
 import Safe
@@ -34,6 +31,7 @@ import Data.Monoid
 import Say
 
 import Hercules.Input.NixHelper
+import Hercules.Util
 import Nix.Store
 
 -- fixme: figure out how this result is used and trim accordingly
@@ -62,8 +60,7 @@ fetchInputGit :: URI -- ^ Git remote clone URI
               -> Maybe Text -- ^ Branch name
               -> IO FetchInputGit
 fetchInputGit uri depth branch = do
-  let cfg = def :: FetchInputGitConfig -- fixme: get config by project
-      branch' = fromMaybe "master" branch
+  let branch' = fromMaybe "master" branch
   clonePath <- createClonePath uri
   withCloneLock clonePath $ do
     exists <- doesDirectoryExist clonePath
@@ -92,24 +89,20 @@ fetchInputGit uri depth branch = do
 gitCacheDir :: FilePath
 gitCacheDir = scmCacheDir defaultDataPath </> "git"
 
-uriHash :: URI -> FilePath
-uriHash uri = BS8.unpack $ B.convertToBase B.Base16 sha256
-  where sha256 = hash (BS8.pack $ show uri) :: Digest SHA256
-
 -- | Return a path for cloning a repo branch.
 -- Ensures that the parent directory exists.
 -- fixme: probably need the branch name in the hash
 createClonePath :: URI -> IO FilePath
 createClonePath uri = do
   createDirectoryIfMissing True gitCacheDir
-  return (gitCacheDir </> uriHash uri)
+  return (gitCacheDir </> sha256Hex uri)
 
 -- | Return a path for the full bare clone of a repo.
 createRepoPath :: URI -> IO FilePath
 createRepoPath uri = do
   let repoDir = gitCacheDir </> "repos"
   createDirectoryIfMissing True repoDir
-  return (repoDir </> uriHash uri <.> "git")
+  return (repoDir </> sha256Hex uri <.> "git")
 
 withCloneLock :: FilePath -> IO a -> IO a
 withCloneLock dir = withLock (dir <.> "lock") Exclusive Block
