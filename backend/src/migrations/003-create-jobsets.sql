@@ -21,7 +21,7 @@ CREATE TABLE jobs (
 --
 
 CREATE TABLE jobsetevals (
-    id integer NOT NULL,
+    id serial PRIMARY KEY NOT NULL,
     project text NOT NULL,
     jobset_id integer NOT NULL REFERENCES github_branches(id) ON DELETE CASCADE,
     "timestamp" integer NOT NULL,
