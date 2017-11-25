@@ -7,8 +7,7 @@ module Servant.Redirect
 
 import Control.Monad.Except
 import Data.ByteString
-import Network.URI
-import Network.URI.Extra
+import URI.ByteString
 import Servant.Server
 
 import Hercules.ServerEnv
@@ -17,5 +16,4 @@ redirectBS :: ByteString -> App a
 redirectBS uri = throwError err303 { errHeaders = [("Location", uri)] }
 
 redirect :: URI -> App a
-redirect = redirectBS . uriToByteString
-
+redirect = redirectBS . serializeURIRef'

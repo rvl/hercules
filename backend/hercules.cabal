@@ -48,7 +48,6 @@ library
                        Hercules.Static
                        Hercules.Swagger
                        Hercules.Util
-                       Network.URI.Extra
                        Nix.Store
                        Opaleye.Extra
                        Servant.Mandatory
@@ -101,6 +100,7 @@ library
                      , time
                      , transformers-base
                      , typed-process
+                     , uri-bytestring
                      , vector
                      , wai
                      , wai-extra

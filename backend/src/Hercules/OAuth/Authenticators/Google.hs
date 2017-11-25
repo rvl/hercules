@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 {-|
 Google specific OAuth2 functionality
@@ -13,12 +14,12 @@ module Hercules.OAuth.Authenticators.Google
 import Control.Concurrent.Async (concurrently)
 import Control.Monad.Except
 import Data.Aeson.TH
-import Data.Maybe               (fromJust)
 import Data.Text
 import Data.Text.Encoding
 import Network.HTTP.Client      (Manager)
-import Network.OAuth.OAuth2     hiding (URI)
-import Network.URI
+import Network.OAuth.OAuth2
+import URI.ByteString
+import URI.ByteString.QQ
 
 import Hercules.Config      (AuthClientInfo (..))
 import Hercules.OAuth.Types
@@ -61,11 +62,10 @@ googleAuthenticator makeCallback clientInfo =
                     (googleGetUserInfo clientInfo)
 
 googleOAuthEndpoint :: OAuthEndpoint
-googleOAuthEndpoint = OAuthEndpoint . fromJust . parseURI
-                    $ "https://accounts.google.com/o/oauth2/auth"
+googleOAuthEndpoint = OAuthEndpoint [uri|https://accounts.google.com/o/oauth2/auth|]
 
 googleAccessTokenEndpoint :: AccessTokenEndpoint
-googleAccessTokenEndpoint = AccessTokenEndpoint . fromJust . parseURI $ "https://www.googleapis.com/oauth2/v3/token"
+googleAccessTokenEndpoint = AccessTokenEndpoint [uri|https://www.googleapis.com/oauth2/v3/token|]
 
 -- | The scope parameter for the users email address
 googleScopeEmail :: QueryParams
@@ -86,13 +86,13 @@ googleGetUserInfo clientInfo token = do
       throwError "Client id didn't match"
     Right (UserId 0) -- TODO fix
 
-validateToken :: Manager -> AccessToken -> IO (OAuth2Result GoogleToken)
-validateToken manager token = parseResponseJSON <$> authGetBS' manager token uri
-  where uri = "https://www.googleapis.com/oauth2/v2/tokeninfo"
+validateToken :: Manager -> AccessToken -> IO (OAuth2Result String GoogleToken)
+validateToken manager token = parseResponseJSON <$> authGetBS' manager token u
+  where u = [uri|https://www.googleapis.com/oauth2/v2/tokeninfo|]
 
-getUserInfo :: Manager -> AccessToken -> IO (OAuth2Result GoogleUser)
+getUserInfo :: Manager -> AccessToken -> IO (OAuth2Result String GoogleUser)
 getUserInfo manager token =
-  authGetJSON manager token "https://www.googleapis.com/oauth2/v2/userinfo"
+  authGetJSON manager token [uri|https://www.googleapis.com/oauth2/v2/userinfo|]
 
 failWith :: MonadError e m => (e' -> e) -> Either e' a -> m a
 failWith f = \case

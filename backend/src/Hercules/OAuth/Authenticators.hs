@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE QuasiQuotes       #-}
 
 {-|
 A module providing data types and functions for getting information about
@@ -10,15 +11,18 @@ module Hercules.OAuth.Authenticators
   , OAuth2Authenticator
   , configAuthenticatorList
   , authenticationURLWithState
+  , appendQueryParam
   ) where
 
 import Data.Aeson
 import Data.ByteString      (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Maybe           (catMaybes)
-import Data.Text
-import Network.OAuth.OAuth2 hiding (URI)
-import Network.URI          (URI (..), URIAuth (..))
+import Data.Text.Encoding   (encodeUtf8)
+import Network.OAuth.OAuth2
+import URI.ByteString
+import Data.Monoid
+import Control.Lens
 
 import Hercules.Config
 import Hercules.OAuth.Authenticators.GitHub
@@ -35,9 +39,9 @@ configAuthenticatorList Config{..} = catMaybes
   where
     makeCallback :: AuthenticatorName -> URI
     makeCallback (AuthenticatorName name) =
-      let authority = URIAuth "" (unpack configHostname) (":" ++ show configPort)
-          path = "/auth-callback/" ++ unpack name
-      in URI "http:" (Just authority) path "" ""
+      let authority = Authority Nothing (Host (encodeUtf8 configHostname)) (Just (Port configPort))
+          path = "/auth-callback/" <> encodeUtf8 name
+      in URI (Scheme "http:") (Just authority) path mempty Nothing
 
 -- | Get the URL to redirect clients to with the given state to roundtrip
 authenticationURLWithState :: OAuth2Authenticator m -> AuthState -> UserAuthURL
@@ -46,7 +50,10 @@ authenticationURLWithState authenticator state =
       queryParams = authenticatorAuthQueryParams authenticator
                     ++ [("state", stateBS)]
       config = authenticatorConfig authenticator
-  in UserAuthURL $ authorizationUrl config `appendQueryParam` queryParams
+  in UserAuthURL . serializeURIRef' $ authorizationUrl config `appendQueryParam` queryParams
 
 packAuthState :: AuthState -> ByteString
 packAuthState = toStrict . encode
+
+appendQueryParam :: URI -> [(ByteString, ByteString)] -> URI
+appendQueryParam u ps = over (queryL . queryPairsL) (++ ps) u

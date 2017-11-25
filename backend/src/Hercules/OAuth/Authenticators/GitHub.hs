@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TemplateHaskell   #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
+{-# LANGUAGE QuasiQuotes       #-}
 
 {-|
 GitHub specific OAuth2 functionality
@@ -13,12 +14,13 @@ module Hercules.OAuth.Authenticators.GitHub
 
 import Control.Monad.Log
 import Data.Aeson.TH
-import Data.Maybe           (fromJust)
 import Data.Semigroup
 import Data.Text            hiding (tail)
+import Data.Text.Encoding   (encodeUtf8)
 import Network.HTTP.Client  (Manager)
-import Network.OAuth.OAuth2 hiding (URI)
-import Network.URI
+import Network.OAuth.OAuth2
+import URI.ByteString
+import URI.ByteString.QQ
 
 import Hercules.Config            (AuthClientInfo (..))
 import Hercules.Database.Hercules
@@ -58,12 +60,10 @@ githubScopeEmail :: QueryParams
 githubScopeEmail = [("scope", "user:email")]
 
 githubOAuthEndpoint :: OAuthEndpoint
-githubOAuthEndpoint = OAuthEndpoint . fromJust . parseURI
-                    $ "https://github.com/login/oauth/authorize"
+githubOAuthEndpoint = OAuthEndpoint [uri|https://github.com/login/oauth/authorize|]
 
 githubAccessTokenEndpoint :: AccessTokenEndpoint
-githubAccessTokenEndpoint = AccessTokenEndpoint . fromJust . parseURI
-                          $ "https://github.com/login/oauth/access_token"
+githubAccessTokenEndpoint = AccessTokenEndpoint [uri|https://github.com/login/oauth/access_token|]
 
 githubGetUserInfo :: AccessToken -> App (Either Text UserId)
 githubGetUserInfo token = do
@@ -81,7 +81,7 @@ findOrCreateUser user token = do
 
 createUser :: GitHubUser -> AccessToken -> App (Either Text UserId)
 createUser GitHubUser{..} token = do
-  encryptedToken <- encrypt (accessToken token)
+  encryptedToken <- encrypt (encodeUtf8 . atoken $ token)
   let user = User () gname gemail (pack . show $ gid) encryptedToken
   withHerculesConnection (\c -> insertUser c user) >>= \case
     Nothing -> pure $ Left "Error inserting user"
@@ -89,6 +89,6 @@ createUser GitHubUser{..} token = do
       logInfo (LogString ("Added user " <> gname <> " to database"))
       pure $ Right i
 
-getUserInfo :: Manager -> AccessToken -> IO (OAuth2Result GitHubUser)
+getUserInfo :: Manager -> AccessToken -> IO (OAuth2Result String GitHubUser)
 getUserInfo manager token = do
-  authGetJSON manager token "https://api.github.com/user"
+  authGetJSON manager token [uri|https://api.github.com/user|]

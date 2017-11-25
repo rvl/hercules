@@ -38,9 +38,10 @@ import Data.Aeson
 import Data.ByteString.Char8
 import Data.Text             (Text)
 import GHC.Generics          (Generic)
-import Network.OAuth.OAuth2  hiding (URI)
-import Network.URI.Extra
+import Network.OAuth.OAuth2
 import Servant               (FromHttpApiData)
+import Data.Text.Encoding    (decodeUtf8)
+import URI.ByteString
 
 import Hercules.OAuth.User
 
@@ -147,12 +148,9 @@ makeAuthenticator makeCallback name queryParams
   where
     config :: OAuth2
     config = OAuth2
-      { oauthClientId = authClientInfoId
-      , oauthClientSecret = authClientInfoSecret
-      , oauthCallback = Just . uriToByteString . makeCallback $ name
-      , oauthOAuthorizeEndpoint =
-          uriToByteString . unOAuthEndpoint $ authEndpoint
-      , oauthAccessTokenEndpoint =
-          uriToByteString . unAccessTokenEndpoint $ accessTokenEndpoint
+      { oauthClientId = decodeUtf8 authClientInfoId
+      , oauthClientSecret = decodeUtf8 authClientInfoSecret
+      , oauthCallback = Just . makeCallback $ name
+      , oauthOAuthorizeEndpoint = unOAuthEndpoint authEndpoint
+      , oauthAccessTokenEndpoint = unAccessTokenEndpoint accessTokenEndpoint
       }
-

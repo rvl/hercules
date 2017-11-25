@@ -9,12 +9,13 @@ module Hercules.OAuth
 
 import           Control.Monad.Except.Extra
 import           Data.Aeson
-import           Data.ByteString.Lazy       (fromStrict, toStrict)
+import           Data.ByteString            (ByteString)
+import           Data.ByteString.Lazy       (fromStrict)
 import           Data.Text
 import           Data.Text.Encoding
-import           Network.OAuth.OAuth2
-import qualified Network.OAuth.OAuth2       as OA
-import           Servant
+import           Network.OAuth.OAuth2 hiding (error)
+import           URI.ByteString
+import           Servant hiding (URI)
 import           Servant.Redirect
 
 import Hercules.OAuth.Authenticators
@@ -40,9 +41,13 @@ handleError :: AuthState
             -> AuthError
             -> App a
 handleError state err = do
-  let redirectURI :: OA.URI
-      redirectURI = encodeUtf8 . unFrontendURL . authStateFrontendURL $ state
-  redirectError redirectURI (unAuthError err)
+  redirectError (redirectURI state) (unAuthError err)
+
+redirectURI :: AuthState -> URI
+redirectURI = fromRight . parseURI strictURIParserOptions . encodeUtf8 . unFrontendURL . authStateFrontendURL
+  where
+    fromRight (Right r) = r
+    fromRight (Left _) = error "fromRight"
 
 handleCode :: AuthenticatorName
            -> AuthState
@@ -54,34 +59,34 @@ handleCode authName state (AuthCode code) = do
   let config = authenticatorConfig authenticator
 
   let clientState = authStateClientState state
-      redirectURI :: OA.URI
-      redirectURI = encodeUtf8 . unFrontendURL . authStateFrontendURL $ state
-      failWithBS err = redirectError redirectURI (decodeUtf8 . toStrict $ err)
+      target = redirectURI state
+      failWithOA (OAuth2Error err _ _) = redirectError target msg
+        where msg = either id (const "unknown error") err
 
   -- Get the access token for this user
-  token <- either failWithBS pure
-    =<< withHttpManager (\m -> fetchAccessToken m config (encodeUtf8 code))
+  token <- either failWithOA pure
+    =<< withHttpManager (\m -> fetchAccessToken m config (ExchangeToken code))
 
   -- Get the user info with the token
-  user <- either (redirectError redirectURI) pure
-    =<< authenticatorGetUserInfo authenticator token
+  user <- either (redirectError target) pure
+    =<< authenticatorGetUserInfo authenticator (accessToken token)
 
   -- Create a JWT
-  jwt <- either (const (redirectError redirectURI "Failed to create JWT")) pure
+  jwt <- either (const (redirectError target "Failed to create JWT")) pure
     =<< makeUserJWT user
 
   -- Return to the frontend
-  redirectSuccess redirectURI jwt clientState
+  redirectSuccess target jwt clientState
 
-redirectError :: OA.URI
+redirectError :: URI
               -> Text
               -- ^ An error message
               -> App a
 redirectError uri message =
   let param = [("authFailure", encodeUtf8 message)]
-  in redirectBS (uri `appendQueryParam` param)
+  in redirectParams uri param
 
-redirectSuccess :: OA.URI
+redirectSuccess :: URI
                 -> PackedJWT
                 -- ^ This user's token
                 -> Maybe AuthClientState
@@ -91,7 +96,10 @@ redirectSuccess uri jwt state =
                case state of
                  Nothing -> []
                  Just s  -> [("state", encodeUtf8 . unAuthClientState $ s)]
-  in redirectBS (uri `appendQueryParam` params)
+  in redirectParams uri params
+
+redirectParams :: URI -> [(ByteString, ByteString)] -> App a
+redirectParams uri params = redirectBS (serializeURIRef' $ uri `appendQueryParam` params)
 
 unpackState :: AuthStatePacked -> Maybe AuthState
 unpackState = decode . fromStrict . encodeUtf8 . unAuthStatePacked
