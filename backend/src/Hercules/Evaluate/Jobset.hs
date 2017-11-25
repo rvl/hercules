@@ -15,10 +15,9 @@ import Safe
 import Say
 import Data.Monoid
 import Control.Monad
-import Data.Either (rights)
 import Data.Maybe
 import Data.List (nubBy, sort)
-import Data.Time.Clock (UTCTime, NominalDiffTime, getCurrentTime, diffUTCTime)
+import Data.Time.Clock (NominalDiffTime, getCurrentTime, diffUTCTime)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Prelude hiding (null)
 import Hercules.ServerEnv
@@ -34,7 +33,7 @@ import Data.Map (Map, (!))
 import qualified Data.Map as M
 import Opaleye
 import System.Random.Shuffle (shuffleM)
-import System.FilePath ((</>), (<.>))
+import System.FilePath ((</>))
 import Data.Ord (comparing)
 
 import Hercules.Evaluate.ReleaseExpr
@@ -58,10 +57,6 @@ jobsetInfoProject = githubRepoName . infoRepo
 jobsetInfoKey :: JobsetInfo -> Text
 jobsetInfoKey js = jobsetInfoProject js <> ":" <> jobsetName js
   where jobsetName = githubBranchName . infoBranch
-
-data EvalJob = EvalJob { evalJobName :: Text
-                       , evalJobInputs :: BuildInputs
-                       }
 
 evaluateJobset :: JobsetInfo -> App ()
 evaluateJobset js@(JobsetInfo repo branch spec) = do
@@ -111,6 +106,44 @@ buildSchedule jobs = shuffleM $ uniq [(name, job) | (name, Right job) <- M.assoc
     uniq = nubBy (\a b -> nfo a == nfo b) -- fixme: n^2
     nfo (name, job) = (name, snd <$> firstOutput (evalResultOutputs job))
 
+-- fixme: implement this boilerplate in opaleye-gen
+pgJobseteval :: Jobseteval -> JobsetevalWriteColumns
+pgJobseteval = pJobseteval Jobseteval
+    { jobsetevalId           = const Nothing
+    , jobsetevalProject      = pgStrictText
+    , jobsetevalJobsetId     = pgInt4
+    , jobsetevalTimestamp    = pgInt4
+    , jobsetevalCheckouttime = pgInt4
+    , jobsetevalEvaltime     = pgInt4
+    , jobsetevalHasnewbuilds = pgInt4
+    , jobsetevalHash         = pgStrictText
+    , jobsetevalNrbuilds     = fmap (toNullable . fromIntegral)
+    , jobsetevalNrsucceeded  = fmap (toNullable . fromIntegral)
+    }
+-- import qualified Data.Profunctor.Product.Default as D
+-- instance D.Default Constant Jobseteval JobsetevalWriteColumns where
+--   def = Constant pgJobseteval
+
+pgJobsetevalinput :: Jobsetevalinput -> JobsetevalinputWriteColumns
+pgJobsetevalinput = pJobsetevalinput Jobsetevalinput
+    { jobsetevalinputEval       = constant
+    , jobsetevalinputName       = pgStrictText
+    , jobsetevalinputAltnr      = constant
+    , jobsetevalinputType       = pgStrictText
+    , jobsetevalinputUri        = pgNullableText
+    , jobsetevalinputRevision   = pgNullableText
+    , jobsetevalinputValue      = pgNullableText
+    , jobsetevalinputDependency = fmap (toNullable . fromIntegral)
+    , jobsetevalinputPath       = pgNullableText
+    , jobsetevalinputSha256Hash = pgNullableText
+    }
+
+pgNullableText :: Maybe Text -> Maybe (Column (Nullable PGText))
+pgNullableText = fmap (toNullable . pgStrictText)
+
+hydraTimestamp :: POSIXTime -> Int
+hydraTimestamp = fromInteger . floor
+
 createBuilds :: JobsetInfo -> EvalResult -> JobsetSource -> BuildInputs -> Text -> NominalDiffTime -> NominalDiffTime -> Connection -> IO ()
 createBuilds js jobs src buildInputs argsHash checkoutTime evalTime conn = withTransaction conn $ do
   prev <- getPrevJobsetEval True (jobsetInfoId js) conn
@@ -130,19 +163,19 @@ createBuilds js jobs src buildInputs argsHash checkoutTime evalTime conn = withT
 
   let jobsetChanged = any (\(_, (new, _, _)) -> new) results || maybe True (/= length results) prevSize
       ev = Jobseteval
-           { jobsetevalId           = Nothing
-           , jobsetevalProject      = pgStrictText $ githubRepoName (infoRepo js) -- fixme: util func
-           , jobsetevalJobsetId     = pgInt4 $ (fromIntegral $ jobsetInfoId js)
-           , jobsetevalTimestamp    = pgInt4 $ fromIntegral . floor $ now
-           , jobsetevalCheckouttime = pgInt4 $ fromIntegral . floor $ checkoutTime
-           , jobsetevalEvaltime     = pgInt4 $ fromIntegral . floor $ evalTime
-           , jobsetevalHasnewbuilds = pgInt4 $ if jobsetChanged then 1 else 0
-           , jobsetevalHash         = pgStrictText argsHash
-           , jobsetevalNrbuilds     = toNullable . pgInt4 <$> if jobsetChanged then Just (length results) else Nothing
+           { jobsetevalId           = 0
+           , jobsetevalProject      = githubRepoName (infoRepo js) -- fixme: util func
+           , jobsetevalJobsetId     = fromIntegral $ jobsetInfoId js
+           , jobsetevalTimestamp    = hydraTimestamp now
+           , jobsetevalCheckouttime = hydraTimestamp checkoutTime
+           , jobsetevalEvaltime     = hydraTimestamp evalTime
+           , jobsetevalHasnewbuilds = if jobsetChanged then 1 else 0
+           , jobsetevalHash         = argsHash
+           , jobsetevalNrbuilds     = if jobsetChanged then Just (fromIntegral (length results)) else Nothing
            , jobsetevalNrsucceeded  = Nothing
-           } :: JobsetevalWriteColumns
+           }
 
-  [evId] <- runInsertManyReturning conn jobsetevalTable [ev] jobsetevalId :: IO [Int32]
+  [evId] <- runInsertManyReturning conn jobsetevalTable [pgJobseteval ev] jobsetevalId :: IO [Int32]
 
   if jobsetChanged
     then do
@@ -152,17 +185,17 @@ createBuilds js jobs src buildInputs argsHash checkoutTime evalTime conn = withT
         -- fixme: figure out where this input info comes from exactly
         -- fixme: hydra-eval-jobset supports multiple names
         inputs = [ Jobsetevalinput
-                   { jobsetevalinputEval       = constant evId
-                   , jobsetevalinputName       = pgStrictText name
+                   { jobsetevalinputEval       = evId
+                   , jobsetevalinputName       = name
                    , jobsetevalinputAltnr      = 0
-                   , jobsetevalinputType       = pgStrictText . inputSpecType . buildInputSpec $ input
-                   , jobsetevalinputUri        = Just . toNullable . pgStrictText . T.pack . show . inputSpecUri . buildInputSpec $ input
-                   , jobsetevalinputRevision   = Just (maybeToNullable (pgStrictText <$> buildInputRev input))
-                   , jobsetevalinputValue      = Just . toNullable . pgStrictText . inputSpecValue . buildInputSpec $ input
-                   , jobsetevalinputDependency = Nothing --  :: Maybe (Maybe Int) -- fixme: "$input->{id}"
-                   , jobsetevalinputPath       = toNullable . pgStrictText . T.pack <$> buildInputStorePath input
-                   , jobsetevalinputSha256Hash = Just (maybeToNullable (pgStrictText <$> buildInputHash input))
-                   } | (name, input) <- M.assocs buildInputs ] :: [JobsetevalinputWriteColumns]
+                   , jobsetevalinputType       = inputSpecType . buildInputSpec $ input
+                   , jobsetevalinputUri        = Just . T.pack . show . inputSpecUri . buildInputSpec $ input
+                   , jobsetevalinputRevision   = buildInputRev input
+                   , jobsetevalinputValue      = Just . inputSpecValue . buildInputSpec $ input
+                   , jobsetevalinputDependency = Nothing -- fixme: "$input->{id}"
+                   , jobsetevalinputPath       = T.pack <$> buildInputStorePath input
+                   , jobsetevalinputSha256Hash = buildInputHash input
+                   } | (name, input) <- M.assocs buildInputs ]
 
         -- Create AggregateConstituents mappings.  Since there can
         -- be jobs that alias each other, if there are multiple
@@ -173,7 +206,7 @@ createBuilds js jobs src buildInputs argsHash checkoutTime evalTime conn = withT
 
       void $ runInsertMany conn jobsetevalmemberTable (map constant members)
       void $ runInsertMany conn Hydra.aggregateconstituentTable ag
-      void $ runInsertMany conn jobsetevalinputTable inputs
+      void $ runInsertMany conn jobsetevalinputTable (map pgJobsetevalinput inputs)
 
       sayErrString $ "  Created new eval " <> show evId
       setBuildsCurrent True js conn -- fixme: check if same as $ev->builds->update({iscurrent => 1});
@@ -235,7 +268,7 @@ checkBuild conn js src prevEval (jobName, buildInfo) = do
         Nothing -> do
           now <- getPOSIXTime
           let build = makeBuild jobName now buildInfo src js
-          [buildId] <- runInsertManyReturning conn Hydra.buildTable [build] Hydra.buildId
+          [buildId] <- runInsertManyReturning conn Hydra.buildTable [pgBuild build] Hydra.buildId
           let buildOutputs = [ Hydra.Buildoutput buildId name (evalResultOutputs buildInfo ! name)
                              | name <- sort (M.keys (evalResultOutputs buildInfo)) ]
           _ <- runInsertMany conn Hydra.buildoutputTable (map constant buildOutputs)
@@ -249,33 +282,67 @@ getOrCreateJob conn js name = withTransaction conn $ do
   [exists] <- runQuery conn (jobExists job) :: IO [Int64]
   when (exists == 0) $ void $ runInsertMany conn jobTable [constant job]
 
+pgBuild :: Hydra.Build -> Hydra.BuildWriteColumns
+pgBuild = Hydra.pBuild Hydra.Build
+    { buildId             = const Nothing
+    , buildFinished       = constant
+    , buildTimestamp      = constant
+    , buildProject        = constant
+    , buildJobset         = pgStrictText
+    , buildJob            = pgStrictText
+    , buildNixname        = pgNullableText
+    , buildDescription    = pgNullableText
+    , buildDrvpath        = pgStrictText
+    , buildSystem         = pgStrictText
+    , buildLicense        = pgNullableText
+    , buildHomepage       = pgNullableText
+    , buildMaintainers    = pgNullableText
+    , buildMaxsilent      = null4
+    , buildTimeout        = null4
+    , buildIschannel      = constant
+    , buildIscurrent      = null4
+    , buildNixexprinput   = pgNullableText
+    , buildNixexprpath    = pgNullableText
+    , buildPriority       = constant
+    , buildGlobalpriority = constant
+    , buildStarttime      = null4
+    , buildStoptime       = null4
+    , buildIscachedbuild  = null4
+    , buildBuildstatus    = null4
+    , buildSize           = fmap (toNullable . pgInt8)
+    , buildClosuresize    = fmap (toNullable . pgInt8)
+    , buildReleasename    = pgNullableText
+    , buildKeep           = constant
+    }
+    where null4 = fmap (toNullable . pgInt4 . fromIntegral)
+
 -- fixme: how does this link to eval?
-makeBuild :: Text -> POSIXTime -> JobEvalResult -> JobsetSource -> JobsetInfo -> Hydra.BuildWriteColumns
+makeBuild :: Text -> POSIXTime -> JobEvalResult -> JobsetSource -> JobsetInfo -> Hydra.Build
 makeBuild jobName time JobEvalResult{..} (JobsetSource nixExprPath _ spec) js = Hydra.Build
-  { buildId             = Nothing
+  { buildId             = 0
   , buildFinished       = 0
-  , buildTimestamp      = pgInt4 . fromIntegral . floor $ time
-  , buildProject        = pgStrictText $ jobsetInfoProject js
-  , buildJobset         = pgStrictText $ githubBranchName (infoBranch js)
-  , buildJob            = pgStrictText $ jobName
-  , buildNixname        = Just . toNullable . pgStrictText $ evalResultNixName
-  , buildDescription    = Just . toNullable . pgStrictText $ evalResultDescription
-  , buildDrvpath        = pgStrictText $ T.pack evalResultDrvPath
-  , buildSystem         = pgStrictText $ evalResultSystem
-  , buildLicense        = Just . toNullable . pgStrictText . buildItemList $ evalResultLicense
-  , buildHomepage       = Just . toNullable . pgStrictText . buildItemList $ evalResultHomepage
-  , buildMaintainers    = Just . toNullable . pgStrictText . buildItemList $ evalResultMaintainers
-  , buildMaxsilent      = Just . toNullable . fromIntegral $ evalResultMaxSilent
-  , buildTimeout        = Just . toNullable . fromIntegral $ evalResultTimeout
+  , buildTimestamp      = fromIntegral $ hydraTimestamp time
+  , buildProject        = jobsetInfoProject js
+  , buildJobset         = githubBranchName (infoBranch js)
+  , buildJob            = jobName
+  , buildNixname        = Just evalResultNixName
+  , buildDescription    = Just evalResultDescription
+  , buildDrvpath        = T.pack evalResultDrvPath
+  , buildSystem         = evalResultSystem
+  , buildLicense        = buildItemList $ evalResultLicense
+  , buildHomepage       = buildItemList $ evalResultHomepage
+  , buildMaintainers    = buildItemList $ evalResultMaintainers
+  , buildMaxsilent      = Just . fromIntegral $ evalResultMaxSilent
+  , buildTimeout        = Just . fromIntegral $ evalResultTimeout
   , buildIschannel      = if evalResultIsChannel then 1 else 0
-  , buildIscurrent      = Just (toNullable 1)
-  , buildNixexprinput   = Just (toNullable "fixme is the input name required?")
-  , buildNixexprpath    = Just . toNullable . pgStrictText . T.pack $ nixExprPath
+  , buildIscurrent      = Just 1
+  , buildNixexprinput   = Just "fixme is the input name required?"
+  , buildNixexprpath    = Just . T.pack $ nixExprPath
   , buildPriority       = fromIntegral evalResultSchedulingPriority
   , buildGlobalpriority = 0
   , buildStarttime      = Nothing
   , buildStoptime       = Nothing
-  , buildIscachedbuild  = Just (toNullable 0)
+  , buildIscachedbuild  = Just 0
   , buildBuildstatus    = Nothing
   , buildSize           = Nothing
   , buildClosuresize    = Nothing
@@ -283,25 +350,17 @@ makeBuild jobName time JobEvalResult{..} (JobsetSource nixExprPath _ spec) js = 
   , buildKeep           = 3
   }
 
-buildItemList :: [Text] -> Text
-buildItemList = T.intercalate ", " -- fixme: check
+buildItemList :: [Text] -> Maybe Text
+buildItemList [] = Nothing
+buildItemList xs = Just (T.intercalate "," xs)
 
 setBuildsCurrent :: Bool -> JobsetInfo -> Connection -> IO ()
-setBuildsCurrent current js c = void $ runUpdate c Hydra.buildTable update pred
+setBuildsCurrent current js c = void $ runUpdateEasy c Hydra.buildTable update pred
   where
-    -- fixme: how to update?
-    update b = undefined { Hydra.buildIscurrent = (Just . toNullable . pgInt4 $ v) }
+    update b = b { Hydra.buildIscurrent = toNullable . pgInt4 $ v }
     pred b = Hydra.buildJobset b .== pgStrictText (githubBranchName (infoBranch js))
              .&& Hydra.buildProject b .== pgStrictText (jobsetInfoProject js)
              .&& Hydra.buildIscurrent b .== toNullable (pgInt4 1)
-    v = if current then 1 else 0
-
-setBuildsCurrentId :: Bool -> JobsetId -> Connection -> IO ()
-setBuildsCurrentId current js c = void $ runUpdate c Hydra.buildTable update pred
-  where
-    -- fixme: how to update?
-    update b = undefined { Hydra.buildIscurrent = (Just . toNullable . pgInt4 $ v) }
-    pred b = Hydra.buildJobset b .== undefined -- fixme: pgInt4 jsId
     v = if current then 1 else 0
 
 data JobsetSource = JobsetSource
@@ -412,14 +471,16 @@ fetchInput _ _ s@(InputSpecGit uri depth branch) = do
   res <- liftIO $ fetchInputGit uri depth branch
   return $ BuildInputGit s (fetchGitStorePath res) (fetchGitSHA256Hash res) M.empty -- fixme: include full fetchinputgit result
 fetchInput _ _ s@(InputSpecNix _) = return $ BuildInputValue s
+fetchInput _ _ s@(InputSpecBoolean _) = return $ BuildInputBoolean s
+fetchInput _ _ s@(InputSpecString _) = return $ BuildInputString s
 fetchInput _ _ s@(InputSpecValue _) = return $ BuildInputValue s
 fetchInput p j s@(InputSpecPreviousBuild _) = fetchInputBuild s p j
 fetchInput _ _ s@(InputSpecPreviousEvaluation v) = fetchInputEvaluation s v
 
--- fixme: implement
+-- fixme: implement fetchInputBuild
 fetchInputBuild :: InputSpec -> Text -> Text -> App BuildInput
-fetchInputBuild i projectName jobsetName = return $ BuildInputPreviousBuild i "" "" -- fixme: placeholder
+fetchInputBuild i projectName jobsetName = return $ BuildInputPreviousBuild i "" ""
 
--- fixme: implement
+-- fixme: implement fetchInputEvaluation
 fetchInputEvaluation :: InputSpec -> Text -> App BuildInput
-fetchInputEvaluation i value = return $ BuildInputPreviousEvaluation i M.empty -- fixme: placeholder
+fetchInputEvaluation i value = return $ BuildInputPreviousEvaluation i M.empty

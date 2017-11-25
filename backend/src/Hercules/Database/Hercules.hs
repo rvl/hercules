@@ -354,7 +354,7 @@ data Jobseteval' c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 =
     , jobsetevalNrsucceeded  :: c10
     }
 
-type Jobseteval = Jobseteval' Int32 Text Int32 Int32 Int32 Int32 Int32 Text (Maybe Int32) (Maybe Int32)
+type Jobseteval = Jobseteval' Int Text Int Int Int Int Int Text (Maybe Int) (Maybe Int)
 
 type JobsetevalReadColumns = Jobseteval' (Column PGInt4) (Column PGText) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGText) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
 
@@ -362,7 +362,7 @@ type JobsetevalWriteColumns = Jobseteval' (Maybe (Column PGInt4)) (Column PGText
 
 type JobsetevalNullableColumns = Jobseteval' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
 
-type JobsetevalNullable = Jobseteval' (Maybe Int32) (Maybe Text) (Maybe Int32) (Maybe Int32) (Maybe Int32) (Maybe Int32) (Maybe Int32) (Maybe Text) (Maybe Int32) (Maybe Int32)
+type JobsetevalNullable = Jobseteval' (Maybe Int) (Maybe Text) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Text) (Maybe Int) (Maybe Int)
 
 fromNullableJobseteval :: JobsetevalNullable -> Maybe Jobseteval
 fromNullableJobseteval = fromNullable
