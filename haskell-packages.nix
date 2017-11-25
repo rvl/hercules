@@ -14,15 +14,9 @@ rec {
             }
           );
 
-          servant-auth-swagger =
-            let
-              src = pkgs.fetchFromGitHub {
-                owner = "plow-technologies";
-                repo = "servant-auth";
-                rev = "fba71585cd39bd16e86580d5320f20e486d5b05a";
-                sha256 = "14ihr5cr7jrqwk9990m64jmw0h4gvrakffddlagm5bm85z0x6csr";
-              };
-            in pkgs.haskell.lib.doJailbreak (haskellPackageGen { doFilter = false; } "${src}/servant-auth-swagger");
+          servant-server = super.servant-server_0_12;
+          servant = super.servant_0_12;
+          servant-foreign = super.servant-foreign_0_10_2;
 
           # Has a better function for updating tables
           opaleye = pkgs.haskell.lib.dontCheck super.opaleye_0_6_0_0;

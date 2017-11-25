@@ -77,6 +77,7 @@ library
                      , memory
                      , monad-control
                      , mtl
+                     , natural-transformation
                      , network-uri
                      , opaleye
                      , postgresql-simple
@@ -96,6 +97,7 @@ library
                      , servant-blaze
                      , servant-elm
                      , servant-server
+                     , servant
                      , text
                      , time
                      , transformers-base
