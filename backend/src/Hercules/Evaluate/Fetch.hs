@@ -9,6 +9,7 @@ module Hercules.Evaluate.Fetch
   , buildInputHash
   , buildInputSpec
   , buildInputRev
+  , buildInputBuildId
   ) where
 
 import Hercules.Evaluate.Spec
@@ -27,7 +28,7 @@ data BuildInput = BuildInputGit InputSpec NixStorePath NixStoreHash (Map Text Te
                 | BuildInputBoolean InputSpec
                 | BuildInputString InputSpec
                 | BuildInputValue InputSpec
-                | BuildInputPreviousBuild InputSpec NixStorePath NixStoreHash
+                | BuildInputPreviousBuild InputSpec NixStorePath NixStoreHash Int
                 | BuildInputPreviousEvaluation InputSpec (Map Text NixStorePath)
                 deriving (Show, Eq)
 
@@ -37,19 +38,23 @@ buildInputSpec (BuildInputNix s)                  = s
 buildInputSpec (BuildInputBoolean s)              = s
 buildInputSpec (BuildInputString s)               = s
 buildInputSpec (BuildInputValue s)                = s
-buildInputSpec (BuildInputPreviousBuild s _ _)    = s
+buildInputSpec (BuildInputPreviousBuild s _ _ _)  = s
 buildInputSpec (BuildInputPreviousEvaluation s _) = s
 
 buildInputStorePath :: BuildInput -> Maybe NixStorePath
 buildInputStorePath (BuildInputGit _ p _ _) = Just p
-buildInputStorePath (BuildInputPreviousBuild _ p _) = Just p
+buildInputStorePath (BuildInputPreviousBuild _ p _ _) = Just p
 buildInputStorePath _ = Nothing
 
 buildInputHash :: BuildInput -> Maybe Text
 buildInputHash (BuildInputGit _ _ h _)         = Just h
-buildInputHash (BuildInputPreviousBuild _ _ h) = Just h
+buildInputHash (BuildInputPreviousBuild _ _ h _) = Just h
 buildInputHash _                               = Nothing
 
 buildInputRev :: BuildInput -> Maybe Text
 buildInputRev (BuildInputGit _ _ _ a) = M.lookup "rev" a
 buildInputRev _ = Nothing
+
+buildInputBuildId :: BuildInput -> Maybe Int
+buildInputBuildId (BuildInputPreviousBuild _ _ _ i) = Just i
+buildInputBuildId _                                 = Nothing
