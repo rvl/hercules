@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module Main
   ( main
@@ -18,7 +19,7 @@ import Elm
 import Servant.Auth.Server
 import Servant.Elm
 import Servant.Foreign
-import Servant.Foreign.Internal (Elem)
+import Servant.API.TypeLevel (Elem)
 import Options.Applicative
 
 import Hercules.API
