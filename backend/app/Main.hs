@@ -85,6 +85,11 @@ options = info (helper <*> parser) description
           )
       <*> optional (authInfoParser "google")
       <*> optional (authInfoParser "github")
+      <*> optional (strOption (fold [ long "github-key-file"
+                          , metavar "FILE"
+                          , help "A PEM file containing the private key generated from GitHub App registration"
+                          ]
+                    ))
       <*> strOption (fold [ long "data-path"
                           , metavar "DIR"
                           , help "A directory to store caches, etc"

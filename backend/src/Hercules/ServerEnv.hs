@@ -84,6 +84,7 @@ data Env = Env { envHerculesConnectionPool :: Pool Connection
                , envPort                   :: Port
                , envHostname               :: HostName
                , envDataPath               :: FilePath
+               , envGitHubAppPrivateKey    :: Maybe ByteString
                }
 
 -- | The cipher Hercues uses for encrypting the github access tokens
@@ -279,6 +280,7 @@ newEnv c@Config{..} authenticators =
       httpManager <- newManager tlsManagerSettings
       key <- liftIO generateKey
       let jwtSettings = defaultJWTSettings key
+      githubKey <- loadGitHubAppKey configGitHubAppPrivateKeyFile
       getCipher c >>= \case
         Nothing -> pure Nothing
         Just cipher ->
@@ -292,6 +294,7 @@ newEnv c@Config{..} authenticators =
             configPort
             configHostname
             configDataPath
+            githubKey
 
 -- | Load a yaml configuration and run an 'App' value, useful for testing in
 -- the REPL.
@@ -306,3 +309,9 @@ runAppWithConfig yaml m =
           runExceptT (runApp env m) >>= \case
             Left err -> error (show err)
             Right x -> pure x
+
+loadGitHubAppKey :: Maybe FilePath -> IO (Maybe ByteString)
+loadGitHubAppKey Nothing = return Nothing
+loadGitHubAppKey (Just f) = do
+  sayErr ("Trying to open github private key at: " <> pack f)
+  readFileMaybe f

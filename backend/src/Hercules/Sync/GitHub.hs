@@ -1,6 +1,5 @@
 module Hercules.Sync.GitHub
-  ( handleGitHubPullRequest
-  , syncAllRepos
+  ( syncAllRepos
   , syncRepo
   , PullRequest(..)
   ) where
@@ -12,11 +11,6 @@ import Data.Vector (Vector)
 import Data.Text (Text)
 import Control.Monad
 
--- something like:
--- https://github.com/litl/leeroy/blob/master/leeroy/base.py
-
-handleGitHubPullRequest :: PullRequest -> IO ()
-handleGitHubPullRequest = undefined
 
 syncAllRepos :: Name Owner -> IO ()
 syncAllRepos owner = do

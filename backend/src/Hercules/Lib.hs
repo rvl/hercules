@@ -45,6 +45,7 @@ import Hercules.Query.Hydra
 import Hercules.ServerEnv
 import Hercules.Static
 import Hercules.Swagger
+import Hercules.Hooks.GitHub
 
 startApp :: Config -> IO ()
 startApp config = do
@@ -67,7 +68,7 @@ loggingMiddleware config = case configAccessLogLevel config of
 app :: Env -> IO Application
 app env = do
   let api = Proxy :: Proxy API
-      authConfig = defaultCookieSettings :. envJWTSettings env :. EmptyContext
+      authConfig = gitHubWebHookCtx env :. defaultCookieSettings :. envJWTSettings env :. EmptyContext
   pure $ serveWithContext api authConfig (server env)
 
 appToHandler' :: forall a. Env -> App a -> Servant.Handler a
@@ -83,6 +84,7 @@ appToHandler env = NT (appToHandler' env)
 server :: Env -> Server API
 server env = enter (appToHandler env) api :<|> serveSwagger
   where api = queryApi
+              :<|> gitHubAppApi
               :<|> pages
               :<|> root
         pages = welcomePage
@@ -96,6 +98,7 @@ server env = enter (appToHandler env) api :<|> serveSwagger
                       :<|> getProject
                       :<|> getProjectsWithJobsets
         protected = getUser
+        gitHubAppApi = gitHubWebHookPR :<|> gitHubWebHookPing
 
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (.:) = (.) . (.)

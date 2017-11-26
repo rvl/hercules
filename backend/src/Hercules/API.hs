@@ -21,6 +21,7 @@ import Hercules.OAuth.Authenticators (AuthenticatorName)
 import Hercules.OAuth.Types          (AuthClientState, AuthCode, AuthError,
                                       AuthStatePacked, FrontendURL)
 import Hercules.OAuth.User
+import Hercules.Hooks.GitHub
 
 type Unprotected =
       "projectNames" :> Get '[JSON] [Text]
@@ -49,6 +50,7 @@ type Pages = "login" :> Get '[HTML] Html
         :<|> "repos" :> Auth '[JWT] UserId :> Get '[HTML] Html
 
 type API = (QueryAPI
+      :<|> GitHubAppAPI
       :<|> Pages
       -- TODO: Waiting for Servant to gain Redirect combinators,
       -- The return type is wrong, this endpoint always redirects

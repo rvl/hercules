@@ -16,6 +16,7 @@ import Servant.Swagger
 
 import Hercules.API            (QueryAPI)
 import Hercules.Database.Extra
+import Hercules.Hooks.GitHub
 
 instance ToSchema Project where
 instance ToSchema Jobset where

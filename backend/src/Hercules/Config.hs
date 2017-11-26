@@ -36,6 +36,7 @@ data Config = Config { configPort                     :: Port
                      , configHydraConnectionString    :: Text
                      , configGoogleAuthInfo           :: Maybe AuthClientInfo
                      , configGitHubAuthInfo           :: Maybe AuthClientInfo
+                     , configGitHubAppPrivateKeyFile  :: Maybe FilePath
                      , configDataPath                 :: FilePath
                      }
   deriving(Read, Show, Generic)
