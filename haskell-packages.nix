@@ -13,13 +13,19 @@ rec {
               sha256 = "1xapgyhkn71m0arb06rv5b1cncz5gv9lybi3q4yavs8zh4jbkbn7";
             }
           );
+          # Has a better function for updating tables
+          opaleye = pkgs.haskell.lib.dontCheck super.opaleye_0_6_0_0;
 
+          # May as well keep up with servant api churn
           servant-server = super.servant-server_0_12;
           servant = super.servant_0_12;
           servant-foreign = super.servant-foreign_0_10_2;
 
-          # Has a better function for updating tables
-          opaleye = pkgs.haskell.lib.dontCheck super.opaleye_0_6_0_0;
+          # bounds for servant-0.12 and github-0.18
+          servant-github-webhook = pkgs.haskell.lib.doJailbreak super.servant-github-webhook;
+
+          # supports apis we need (i think)
+          github = super.github_0_18;
         };
       };
 

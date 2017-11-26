@@ -91,6 +91,7 @@ library
                      , say
                      , servant-auth-server
                      , servant-auth-swagger
+                     , servant-github-webhook
                      , servant-swagger-ui
                      , servant-swagger
                      , swagger2
