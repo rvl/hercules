@@ -16,7 +16,7 @@ let
     { HYDRA_DBI = cfg.dbi;
       HYDRA_CONFIG = "${baseDir}/hydra.conf";
       HYDRA_DATA = "${baseDir}";
-      HERCULES_CONFIG = "${herculesVarConf}";
+      HERCULES_CONFIG = "${herculesConf}";
     };
 
   env =
@@ -37,7 +37,7 @@ let
     } // (optionalAttrs cfg.debugServer { DBIC_TRACE = "1"; });
 
   localDB = "dbi:Pg:dbname=hydra;user=hydra;";
-  localDBUrl = "postgresql:///hydra";
+  localDBUrl = "postgresql://hydra@/hydra";
 
   haveLocalDB = cfg.dbi == localDB;
 
@@ -344,9 +344,9 @@ in
           chown hydra.hydra ${cfg.gcRootsDir}
           chmod 2775 ${cfg.gcRootsDir}
         '';
-        serviceConfig.ExecStart = "${cfg.herculesPackage}/bin/hercules-init -c ${herculesVarConf}";
+        serviceConfig.ExecStart = "${cfg.herculesPackage}/bin/hercules-init -c ${herculesConf}";
         serviceConfig.PermissionsStartOnly = true;
-        serviceConfig.User = "hercules-www";
+        serviceConfig.User = "hydra";
         serviceConfig.Type = "oneshot";
         serviceConfig.RemainAfterExit = true;
       };

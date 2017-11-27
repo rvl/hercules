@@ -59,7 +59,7 @@ rec {
       testScript =
         ''
           $machine->waitForJob("hercules-init");
-          $machine->waitForJob("hercules");
+          $machine->waitForJob("hercules-server");
           $machine->waitForJob("hydra-evaluator");
           $machine->waitForJob("hydra-queue-runner");
           $machine->waitForOpenPort("3000");
