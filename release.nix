@@ -1,4 +1,4 @@
-{ hydraSrc ? { outPath = ./.; revCount = 1234; rev = "abcdef"; }
+{ herculesSrc ? { outPath = ./backend; revCount = 1234; rev = "abcdef"; }
 , officialRelease ? false
 , shell ? false
 }:
@@ -36,7 +36,10 @@ in
 rec {
 
   build = genAttrs' (system:
-    import ./backend/default.nix { pkgs = import <nixpkgs> { inherit system; }; });
+    import ./backend/default.nix {
+      pkgs = import <nixpkgs> { inherit system; };
+      src = herculesSrc.outPath;
+    });
 
   frontend = genAttrs' (system:
     import ./frontend/default.nix {
@@ -55,7 +58,7 @@ rec {
       machine = herculesServer build.${system};
       testScript =
         ''
-          $machine->waitForJob("hydra-init");
+          $machine->waitForJob("hercules-init");
           $machine->waitForJob("hercules");
           $machine->waitForJob("hydra-evaluator");
           $machine->waitForJob("hydra-queue-runner");

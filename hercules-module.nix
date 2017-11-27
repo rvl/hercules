@@ -11,11 +11,12 @@ let
   hydraConf = pkgs.writeScript "hydra.conf" cfg.extraConfig;
   herculesConf = pkgs.writeScript "hercules.conf" cfg.extraHerculesConfig;
 
+  herculesVarConf = "${baseDir}/hercules/config.yaml";  # symlink
   hydraEnv =
     { HYDRA_DBI = cfg.dbi;
       HYDRA_CONFIG = "${baseDir}/hydra.conf";
       HYDRA_DATA = "${baseDir}";
-      HERCULES_CONFIG = "${baseDir}/hercules/config.yml";
+      HERCULES_CONFIG = "${herculesVarConf}";
     };
 
   env =
@@ -277,14 +278,14 @@ in
       ''
         port: ${toString cfg.port}
         hostname: "${cfg.listenHost}"
-        access_log_level: Disabled
-        secret_key_file: "${baseDir}/hercules/secret.key"
-        connection_string: "${cfg.dbUrl}"
-        data_path: "${baseDir}"
+        accessLogLevel: Disabled
+        secretKeyFile: "${baseDir}/hercules/secret.key"
+        databaseConnectionString: "${cfg.dbUrl}"
+        dataPath: "${baseDir}"
       '' + optionalString (cfg.githubPrivateKeyFile != null) '';
-        git_hub_app_private_key_file: "${cfg.githubPrivateKeyFile}"
+        gitHubAppPrivateKeyFile: "${cfg.githubPrivateKeyFile}"
       '' + optionalString (cfg.githubOAuthConsumerId != null && cfg.githubOAuthConsumerKey != null) ''
-        git_hub_auth_info:
+        gitHubAuthInfo:
           id: ${cfg.githubOAuthConsumerId}
           secret: ${cfg.githubOAuthConsumerKey}
       '';
@@ -343,7 +344,7 @@ in
           chown hydra.hydra ${cfg.gcRootsDir}
           chmod 2775 ${cfg.gcRootsDir}
         '';
-        serviceConfig.ExecStart = "${cfg.herculesPackage}/bin/hercules-init";
+        serviceConfig.ExecStart = "${cfg.herculesPackage}/bin/hercules-init -c ${herculesVarConf}";
         serviceConfig.PermissionsStartOnly = true;
         serviceConfig.User = "hercules-www";
         serviceConfig.Type = "oneshot";
@@ -357,7 +358,7 @@ in
         environment = serverEnv;
         restartTriggers = [ herculesConf ];
         serviceConfig =
-          { ExecStart = "@${cfg.herculesPackage}/bin/hercules hercules -c ${cfg.extraHerculesConfig}";
+          { ExecStart = "@${cfg.herculesPackage}/bin/hercules hercules -c ${herculesVarConf}";
             User = "hercules-www";
             PermissionsStartOnly = true;
             Restart = "always";
