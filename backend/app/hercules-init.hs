@@ -26,7 +26,7 @@ main = getConfig >>= uncurry herculesInit
 
 herculesInit :: Verbosity -> Config -> IO ()
 herculesInit v Config{..} = do
-  conn <- connectPostgreSQL (encodeUtf8 configHerculesConnectionString)
+  conn <- connectPostgreSQL (encodeUtf8 configDatabaseConnectionString)
   readyDatabase v conn >>= \case
     MigrationError s -> do
       sayErr ("Error migrating hercules database: " <> s)

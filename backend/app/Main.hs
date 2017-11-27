@@ -69,17 +69,10 @@ options = info (helper <*> parser) description
                           , help "A file containing a 256 bit key for encrypting github tokens"
                           ]
                     )
-      <*> (T.pack <$> strOption (fold [ long "hercules-connection"
+      <*> (T.pack <$> strOption (fold [ long "database"
                                       , short 'e'
                                       , metavar "CONNECTION_STRING"
                                       , help "hercules database postgres connection string, see https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING"
-                                      ]
-                                )
-          )
-      <*> (T.pack <$> strOption (fold [ long "hydra-connection"
-                                      , short 'y'
-                                      , metavar "CONNECTION_STRING"
-                                      , help "hydra database postgres connection string, see https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING"
                                       ]
                                 )
           )

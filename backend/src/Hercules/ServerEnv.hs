@@ -18,7 +18,6 @@ module Hercules.ServerEnv
   , runHerculesQueryWithConnectionSingular
   , runUpdateReturningWithConnection
   , runUpdateWithConnection
-  , runHydraQueryWithConnection
   , withHerculesConnection
   , withHttpManager
   , getAuthenticator
@@ -75,16 +74,15 @@ import Network.Wai.Handler.Warp             (Port)
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 
-data Env = Env { envHerculesConnectionPool :: Pool Connection
-               , envHydraConnectionPool    :: Pool Connection
-               , envHttpManager            :: HTTP.Manager
-               , envAuthenticators         :: [OAuth2Authenticator App]
-               , envJWTSettings            :: JWTSettings
-               , envCipher                 :: HerculesCipher
-               , envPort                   :: Port
-               , envHostname               :: HostName
-               , envDataPath               :: FilePath
-               , envGitHubAppPrivateKey    :: Maybe ByteString
+data Env = Env { envConnectionPool      :: Pool Connection
+               , envHttpManager         :: HTTP.Manager
+               , envAuthenticators      :: [OAuth2Authenticator App]
+               , envJWTSettings         :: JWTSettings
+               , envCipher              :: HerculesCipher
+               , envPort                :: Port
+               , envHostname            :: HostName
+               , envDataPath            :: FilePath
+               , envGitHubAppPrivateKey :: Maybe ByteString
                }
 
 -- | The cipher Hercues uses for encrypting the github access tokens
@@ -117,14 +115,7 @@ helpMeImConfused action = action >>= \case
 -- return the result
 withHerculesConnection :: (Connection -> IO a) -> App a
 withHerculesConnection f = do
-  connectionPool <- asks envHerculesConnectionPool
-  liftIO $ withResource connectionPool f
-
--- | Perform an action with a PostgreSQL connection to the Hydra DB and return
--- the result
-withHydraConnection :: (Connection -> IO a) -> App a
-withHydraConnection f = do
-  connectionPool <- asks envHydraConnectionPool
+  connectionPool <- asks envConnectionPool
   liftIO $ withResource connectionPool f
 
 withHttpManager :: (HTTP.Manager -> IO a) -> App a
@@ -182,15 +173,6 @@ runHerculesQueryWithConnectionSingular q =
       logError "Singular query returned multiple results"
       pure Nothing
 
--- | Evaluate a query in an 'App' value
-runHydraQueryWithConnection
-  :: Default QueryRunner columns haskells
-  => Default Unpackspec columns columns
-  => Query columns -> App [haskells]
-runHydraQueryWithConnection q = do
-  logQuery q
-  withHydraConnection (\c -> runQuery c q)
-
 logQuery
   :: Default Unpackspec columns columns
   => Query columns
@@ -215,7 +197,7 @@ runApp env = mapExceptT runLog
 getHerculesConnection :: MonadIO m => Config -> m (Maybe (Pool Connection))
 getHerculesConnection Config{..} = liftIO $ do
   herculesConnection <- createPool
-    (connectPostgreSQL (encodeUtf8 configHerculesConnectionString))
+    (connectPostgreSQL (encodeUtf8 configDatabaseConnectionString))
     close
     4 10 4
   withResource herculesConnection (readyDatabase Quiet) >>= \case
@@ -273,10 +255,6 @@ newEnv c@Config{..} authenticators =
   getHerculesConnection c >>= \case
     Nothing -> pure Nothing
     Just herculesConnection -> liftIO $ do
-      hydraConnection <- createPool
-        (connectPostgreSQL (encodeUtf8 configHydraConnectionString))
-        close
-        4 10 4
       httpManager <- newManager tlsManagerSettings
       key <- liftIO generateKey
       let jwtSettings = defaultJWTSettings key
@@ -286,7 +264,6 @@ newEnv c@Config{..} authenticators =
         Just cipher ->
           pure . Just $ Env
             herculesConnection
-            hydraConnection
             httpManager
             authenticators
             jwtSettings

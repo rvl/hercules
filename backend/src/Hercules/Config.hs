@@ -12,7 +12,6 @@ module Hercules.Config
 
 import Data.Aeson
 import Data.Aeson.Extra           (prefixOptions)
-import Data.Char                  (toLower)
 import Data.Text                  (Text)
 import Database.PostgreSQL.Simple (ConnectInfo (..))
 import GHC.Generics
@@ -32,8 +31,7 @@ data Config = Config { configPort                     :: Port
                      , configHostname                 :: HostName
                      , configAccessLogLevel           :: AccessLogLevel
                      , configSecretKeyFile            :: FilePath
-                     , configHerculesConnectionString :: Text
-                     , configHydraConnectionString    :: Text
+                     , configDatabaseConnectionString :: Text
                      , configGoogleAuthInfo           :: Maybe AuthClientInfo
                      , configGitHubAuthInfo           :: Maybe AuthClientInfo
                      , configGitHubAppPrivateKeyFile  :: Maybe FilePath
