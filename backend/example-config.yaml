@@ -1,7 +1,12 @@
 port: 8080
 hostname: "localhost"
-access_log_level: Disabled
-secret_key_file: "secret.key"
-hydra_connection_string: "postgresql://hydra@/hydra"
-hercules_connection_string: "postgresql://hercules@/hercules"
-data_path: "/var/lib/hercules"
+accessLogLevel: Disabled
+secretKeyFile: "secret.key"
+databaseConnectionString: "postgresql://hydra@/hydra"
+dataPath: "/var/lib/hercules"
+
+# # Register own app at https://github.com/settings/developers
+# gitHubAuthInfo:
+#   id: 0123456789abcdef0123
+#   secret: 0123456789abcdef0123456789abcdef01234567
+# gitHubAppPrivateKeyFile: "github.pem"
