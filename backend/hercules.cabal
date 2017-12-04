@@ -183,8 +183,24 @@ test-suite test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
-                     , hspec
+                     , bytestring
+                     , cryptonite
+                     , data-default
+                     , github
                      , hercules
+                     , hspec
+                     , hspec-wai
+                     , hspec-wai-json
+                     , http-client
+                     , http-types
+                     , memory
+                     , mtl
+                     , natural-transformation
+                     , servant
+                     , servant-github-webhook
+                     , servant-server
+                     , wai
+                     , warp
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

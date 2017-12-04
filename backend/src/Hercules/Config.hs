@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE StrictData      #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE StrictData         #-}
+{-# LANGUAGE TemplateHaskell    #-}
 
 module Hercules.Config
   ( Config(..)
@@ -16,6 +17,7 @@ import Data.Text                  (Text)
 import Database.PostgreSQL.Simple (ConnectInfo (..))
 import GHC.Generics
 import Network.Wai.Handler.Warp   (Port)
+import Data.Default
 
 import Hercules.OAuth.Types
 
@@ -41,3 +43,17 @@ data Config = Config { configPort                     :: Port
   deriving(Read, Show, Generic)
 
 instance FromJSON Config where parseJSON = genericParseJSON prefixOptions
+
+-- | Default instance for testing convenience
+instance Default Config where
+  def = Config { configPort                     = 8080
+               , configHostname                 = "localhost"
+               , configAccessLogLevel           = Enabled
+               , configSecretKeyFile            = ""
+               , configDatabaseConnectionString = "postgresql://hydra@/hydra"
+               , configGoogleAuthInfo           = Nothing
+               , configGitHubAuthInfo           = Nothing
+               , configGitHubWebHookSecretFile  = Nothing
+               , configGitHubAppPrivateKeyFile  = Nothing
+               , configDataPath                 = "/var/lib/hercules"
+               }

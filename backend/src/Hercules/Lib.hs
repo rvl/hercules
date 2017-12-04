@@ -7,6 +7,9 @@
 module Hercules.Lib
   ( startApp
   , swaggerDoc
+  , server
+  , appContext
+  , appToHandler
   ) where
 
 import Control.Monad                        (join)
@@ -25,7 +28,7 @@ import Network.Wai.Middleware.RequestLogger
 import Safe                                 (headMay)
 import Servant
 import Servant.Utils.Enter                  (enter)
-import Servant.Auth.Server                  (AuthResult (..),
+import Servant.Auth.Server                  (AuthResult (..), CookieSettings, JWTSettings,
                                              defaultCookieSettings)
 import Servant.Mandatory
 import Servant.Redirect
@@ -66,10 +69,11 @@ loggingMiddleware config = case configAccessLogLevel config of
   Development -> logStdoutDev
 
 app :: Env -> IO Application
-app env = do
-  let api = Proxy :: Proxy API
-      authConfig = gitHubWebHookCtx env :. defaultCookieSettings :. envJWTSettings env :. EmptyContext
-  pure $ serveWithContext api authConfig (server env)
+app env = pure $ serveWithContext api (appContext env) (server env)
+  where  api = Proxy :: Proxy API
+
+appContext :: Env -> Context '[GitHubKey, CookieSettings, JWTSettings]
+appContext env = gitHubWebHookCtx env :. defaultCookieSettings :. envJWTSettings env :. EmptyContext
 
 appToHandler' :: forall a. Env -> App a -> Servant.Handler a
 appToHandler' env r = do
