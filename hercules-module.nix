@@ -102,7 +102,8 @@ in
 
       listenHost = mkOption {
         type = types.str;
-        default = "*";
+        default = "locahost";
+        # default = "*";  # fixme: don't use this setting for building urls
         example = "localhost";
         description = ''
           The hostname or address to listen on or <literal>*</literal> to listen
@@ -182,22 +183,31 @@ in
         description = "Extra lines for the Hercules configuration.";
       };
 
-      githubPrivateKeyFile = mkOption {
-        type = types.nullOr types.path;
-        default = null;
-        description = "File which contains the GitHub application private key in PEM format.";
-      };
+      gitHub = {
+        privateKeyFile = mkOption {
+          type = types.nullOr types.path;
+          default = null;
+          description = "File which contains the GitHub application private key in PEM format.";
+        };
 
-      githubOAuthConsumerId = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "GitHub application OAuth credentials";
-      };
+        webHookSecretFile = mkOption {
+          type = types.nullOr types.path;
+          default = null;
+          description = "File which contains the GitHub webhook secret (usually 40 random hex digits)";
+        };
 
-      githubOAuthConsumerKey = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "GitHub application OAuth credentials";
+        oauthConsumerId = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "GitHub application OAuth credentials";
+        };
+
+        # fixme: use file for id:key
+        oauthConsumerKey = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "GitHub application OAuth credentials";
+        };
       };
 
       extraEnv = mkOption {
@@ -282,12 +292,14 @@ in
         secretKeyFile: "${baseDir}/hercules/secret.key"
         databaseConnectionString: "${cfg.dbUrl}"
         dataPath: "${baseDir}"
-      '' + optionalString (cfg.githubPrivateKeyFile != null) '';
-        gitHubAppPrivateKeyFile: "${cfg.githubPrivateKeyFile}"
-      '' + optionalString (cfg.githubOAuthConsumerId != null && cfg.githubOAuthConsumerKey != null) ''
+      '' + optionalString (cfg.gitHub.webHookSecretFile != null) ''
+        gitHubWebHookSecretFile: "${cfg.gitHub.webHookSecretFile}"
+      '' + optionalString (cfg.gitHub.privateKeyFile != null) ''
+        gitHubAppPrivateKeyFile: "${cfg.gitHub.privateKeyFile}"
+      '' + optionalString (cfg.gitHub.oauthConsumerId != null && cfg.gitHub.oauthConsumerKey != null) ''
         gitHubAuthInfo:
-          id: ${cfg.githubOAuthConsumerId}
-          secret: ${cfg.githubOAuthConsumerKey}
+          id: ${cfg.gitHub.oauthConsumerId}
+          secret: ${cfg.gitHub.oauthConsumerKey}
       '';
 
     services.hercules.herculesPackage = mkDefault ((import ./release.nix {}).build.x86_64-linux);

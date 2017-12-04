@@ -1,13 +1,14 @@
 { backend ? (import ./../backend {})
 , pkgs ? (import ./../pkgs.nix) {}
-, backendURL ? "http://localhost:8080" }:
+, backendURL ? "http://localhost:8080"
+, src ? ./. }:
 
 with pkgs;
 
 stdenv.mkDerivation {
  name = "hercules-frontend";
 
- src = ./.;
+ inherit src;
 
  buildInputs = [ elmPackages.elm elmPackages.elm-format nodejs ];
 

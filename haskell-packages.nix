@@ -17,8 +17,9 @@ rec {
           opaleye = pkgs.haskell.lib.dontCheck super.opaleye_0_6_0_0;
 
           # May as well keep up with servant api churn
-          servant-server = super.servant-server_0_12;
           servant = super.servant_0_12;
+          servant-server = super.servant-server_0_12;
+          servant-client = super.servant-client_0_12_0_1;
           servant-foreign = super.servant-foreign_0_10_2;
 
           # bounds for servant-0.12 and github-0.18
@@ -35,11 +36,11 @@ rec {
                       , doHaddock ? true
                       , extraEnvPackages ? [] # Any extra packages to be made available in the developer shell only
                       }: src:
-    let filteredSrc = builtins.filterSource (path: type:
+    let filteredSrc = if builtins.typeOf src != "path" then src else
+          builtins.filterSource (path: type:
           type != "unknown" &&
           (baseNameOf path == "dist" -> type != "directory")
         ) src;
-
         package = pkgs.runCommand "default.nix" {} ''
           ${pkgs.haskell.packages.ghc802.cabal2nix}/bin/cabal2nix \
             ${if doFilter then filteredSrc else src} \
