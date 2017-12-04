@@ -11,6 +11,8 @@ module Hercules.Hooks.GitHub
   , gitHubWebHookPR
   , gitHubWebHookPing
   , gitHubWebHookCtx
+  , GitHubKey
+  , PingRegistration(..)
   ) where
 
 import Data.Text (Text)
@@ -65,12 +67,11 @@ type GitHubAppAPI = "github" :> "webhook" :> (
   )
 
 data PingRegistration = PingRegistration
-                        { pingEvent :: PingEvent
-                        , appId :: Int
+                        { pingAppId :: Int
                         } deriving (Show)
 
 instance FromJSON PingRegistration where
-  parseJSON v = PingRegistration <$> parseJSON v <*> parseAppId v
+  parseJSON v = PingRegistration <$> parseAppId v
     where
       parseAppId = withObject "ping event" $ \o -> do
         h <- o .: "hook"
@@ -83,8 +84,7 @@ instance FromJSON PingRegistration where
 gitHubWebHookPing :: RepoWebhookEvent -> ((), PingRegistration) -> App NoContent
 gitHubWebHookPing _ (_, ev@PingRegistration{..}) = do
   logInfo . LogString $ "Received GitHub ping: " <> T.pack (show ev)
-  -- fixme: hook should have app_id field -- need to wrap PingEvent
-  -- to support this. then the app_id should be stored in the database.
+  withHerculesConnection $ \c -> setGitHubAppId c pingAppId
   return NoContent
 
 
@@ -139,7 +139,7 @@ addBuild :: Name Owner -> Name Repo -> Name Commit
 addBuild owner repo rev complete = return True
 
 gitHubWebHookCtx :: Env -> GitHubKey
-gitHubWebHookCtx = gitHubKey . pure . fromMaybe "no key configured" . envGitHubAppPrivateKey
+gitHubWebHookCtx = gitHubKey . pure . fromMaybe "" . envGitHubWebHookSecret
 
 ----------------------------------------------------------------------------
 -- all instances required to document webhook endpoints in swagger...

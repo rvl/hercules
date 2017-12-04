@@ -17,13 +17,17 @@ module Hercules.Query.Hercules
   , jobsetByIdQuery
   , jobsetRestriction
   , jobExists
+  , getGitHubAppId
+  , setGitHubAppId
   ) where
 
 import Control.Arrow              (returnA)
 import Data.ByteString
+import Data.Maybe (listToMaybe)
 import Data.Text
-import Database.PostgreSQL.Simple (Connection)
+import Database.PostgreSQL.Simple (Connection, withTransaction)
 import Opaleye.Extra
+import Data.Time.Clock (getCurrentTime)
 
 import Hercules.Database.Hercules
 import Hercules.OAuth.User
@@ -113,3 +117,19 @@ prevJobsetEvalQuery hasNewBuilds js = proc () -> do
   restrict -< jobsetevalJobsetId .== constant js
   restrict -< if hasNewBuilds then jobsetevalHasnewbuilds .=== pgInt4 1 else pgBool True
   returnA -< jse
+
+
+gitHubAppIdQuery :: Query (Column PGInt4)
+gitHubAppIdQuery = proc () -> do
+  app <- limit 1 (queryTable githubAppTable) -< ()
+  returnA -< githubAppAppId app
+
+getGitHubAppId :: Connection -> IO (Maybe Int)
+getGitHubAppId c = listToMaybe <$> runQuery c gitHubAppIdQuery
+
+setGitHubAppId :: Connection -> Int -> IO ()
+setGitHubAppId c appId = withTransaction c $ do
+  now <- getCurrentTime
+  _ <- runDelete c githubAppTable (const $ pgBool True)
+  _ <- runInsertMany c githubAppTable [pgGithubApp (GithubApp appId now)]
+  return ()
