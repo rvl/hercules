@@ -34,6 +34,7 @@ data Config = Config { configPort                     :: Port
                      , configDatabaseConnectionString :: Text
                      , configGoogleAuthInfo           :: Maybe AuthClientInfo
                      , configGitHubAuthInfo           :: Maybe AuthClientInfo
+                     , configGitHubWebHookSecretFile  :: Maybe FilePath
                      , configGitHubAppPrivateKeyFile  :: Maybe FilePath
                      , configDataPath                 :: FilePath
                      }

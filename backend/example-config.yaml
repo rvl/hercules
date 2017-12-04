@@ -10,3 +10,4 @@ dataPath: "/var/lib/hercules"
 #   id: 0123456789abcdef0123
 #   secret: 0123456789abcdef0123456789abcdef01234567
 # gitHubAppPrivateKeyFile: "github.pem"
+# gitHubWebHookSecretFile: "webook-secret.txt"

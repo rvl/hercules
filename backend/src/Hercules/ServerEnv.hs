@@ -82,6 +82,7 @@ data Env = Env { envConnectionPool      :: Pool Connection
                , envPort                :: Port
                , envHostname            :: HostName
                , envDataPath            :: FilePath
+               , envGitHubWebHookSecret :: Maybe ByteString
                , envGitHubAppPrivateKey :: Maybe ByteString
                }
 
@@ -258,7 +259,8 @@ newEnv c@Config{..} authenticators =
       httpManager <- newManager tlsManagerSettings
       key <- liftIO generateKey
       let jwtSettings = defaultJWTSettings key
-      githubKey <- loadGitHubAppKey configGitHubAppPrivateKeyFile
+      githubKey <- loadKeyFile configGitHubAppPrivateKeyFile
+      webHookSecret <- loadKeyFile configGitHubWebHookSecretFile
       getCipher c >>= \case
         Nothing -> pure Nothing
         Just cipher ->
@@ -272,6 +274,7 @@ newEnv c@Config{..} authenticators =
             configHostname
             configDataPath
             githubKey
+            webHookSecret
 
 -- | Load a yaml configuration and run an 'App' value, useful for testing in
 -- the REPL.
@@ -287,8 +290,8 @@ runAppWithConfig yaml m =
             Left err -> error (show err)
             Right x -> pure x
 
-loadGitHubAppKey :: Maybe FilePath -> IO (Maybe ByteString)
-loadGitHubAppKey Nothing = return Nothing
-loadGitHubAppKey (Just f) = do
-  sayErr ("Trying to open github private key at: " <> pack f)
+loadKeyFile :: Maybe FilePath -> IO (Maybe ByteString)
+loadKeyFile Nothing = return Nothing
+loadKeyFile (Just f) = do
+  sayErr ("Trying to open: " <> pack f)
   readFileMaybe f

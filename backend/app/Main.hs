@@ -78,6 +78,11 @@ options = info (helper <*> parser) description
           )
       <*> optional (authInfoParser "google")
       <*> optional (authInfoParser "github")
+      <*> optional (strOption (fold [ long "github-webhook-secret-file"
+                          , metavar "FILE"
+                          , help "A file containing the optional webhook secret of the GitHub App"
+                          ]
+                    ))
       <*> optional (strOption (fold [ long "github-key-file"
                           , metavar "FILE"
                           , help "A PEM file containing the private key generated from GitHub App registration"
