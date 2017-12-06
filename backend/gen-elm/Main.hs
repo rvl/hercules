@@ -17,6 +17,7 @@ import Data.Text (Text, replace, pack)
 import Data.Monoid ((<>))
 import Elm
 import Servant.Auth.Server
+import Servant.GitHub.Webhook
 import Servant.Elm
 import Servant.Foreign
 import Servant.API.TypeLevel (Elem)
@@ -59,6 +60,22 @@ instance forall lang ftype api auths a.
         { _argName = PathSegment "authorization"
         , _argType = typeFor lang (Proxy :: Proxy ftype) (Proxy :: Proxy Text)
         }
+
+-- Provide stub instance for github webhooks, although these would
+-- never be called from elm.
+instance forall lang ftype api evs. HasForeign lang ftype api
+  => HasForeign lang ftype (GitHubEvent evs :> api) where
+  type Foreign ftype (GitHubEvent evs :> api) = Foreign ftype api
+  foreignFor lang Proxy Proxy subR =
+    foreignFor lang Proxy (Proxy :: Proxy api) subR
+
+-- Provide stub instance for github webhook auth protected apis.
+instance forall lang ftype api ev b. HasForeign lang ftype api
+  => HasForeign lang ftype (GitHubSignedReqBody b ev :> api) where
+  type Foreign ftype (GitHubSignedReqBody b ev :> api) = Foreign ftype api
+  foreignFor lang Proxy Proxy subR =
+    foreignFor lang Proxy (Proxy :: Proxy api) subR
+
 
 data ElmConfig = ElmConfig
   { elmpath :: String

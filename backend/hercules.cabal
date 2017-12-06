@@ -164,6 +164,7 @@ executable gen-elm
                      , servant-auth-server
                      , servant-elm
                      , servant-foreign
+                     , servant-github-webhook
                      , text
   default-language:    Haskell2010
 
