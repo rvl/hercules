@@ -88,7 +88,6 @@ appToHandler env = NT (appToHandler' env)
 server :: Env -> Server API
 server env = enter (appToHandler env) api :<|> serveSwagger
   where api = queryApi
-              :<|> gitHubAppApi
               :<|> pages
               :<|> root
         pages = welcomePage
@@ -96,13 +95,12 @@ server env = enter (appToHandler env) api :<|> serveSwagger
                 :<|> (mandatory1 .∵ authCallback)
                 :<|> loggedInPage
                 :<|> (join . withAuthenticated userInfoPage)
-        queryApi = unprotected :<|> protected
+        queryApi = unprotected :<|> protected :<|> gitHubAppApi
         unprotected = getProjectNames
                       :<|> getProjects
                       :<|> getProject
                       :<|> getProjectsWithJobsets
         protected = getUser
-        gitHubAppApi = gitHubWebHookPR :<|> gitHubWebHookPing
 
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (.:) = (.) . (.)

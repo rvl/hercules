@@ -196,9 +196,12 @@ test-suite test
                      , memory
                      , mtl
                      , natural-transformation
+                     , say
                      , servant
                      , servant-github-webhook
                      , servant-server
+                     , text
+                     , tmp-postgres
                      , wai
                      , warp
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N

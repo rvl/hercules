@@ -17,6 +17,7 @@ module Hercules.Query.Hercules
   , jobsetByIdQuery
   , jobsetRestriction
   , jobExists
+  , gitHubAppQuery
   , getGitHubAppId
   , setGitHubAppId
   ) where
@@ -119,13 +120,11 @@ prevJobsetEvalQuery hasNewBuilds js = proc () -> do
   returnA -< jse
 
 
-gitHubAppIdQuery :: Query (Column PGInt4)
-gitHubAppIdQuery = proc () -> do
-  app <- limit 1 (queryTable githubAppTable) -< ()
-  returnA -< githubAppAppId app
+gitHubAppQuery :: Query GithubAppReadColumns
+gitHubAppQuery = limit 1 (queryTable githubAppTable)
 
 getGitHubAppId :: Connection -> IO (Maybe Int)
-getGitHubAppId c = listToMaybe <$> runQuery c gitHubAppIdQuery
+getGitHubAppId c = listToMaybe <$> runQuery c (fmap githubAppAppId gitHubAppQuery)
 
 setGitHubAppId :: Connection -> Int -> IO ()
 setGitHubAppId c appId = withTransaction c $ do

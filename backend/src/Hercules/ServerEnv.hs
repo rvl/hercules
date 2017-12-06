@@ -14,6 +14,8 @@ module Hercules.ServerEnv
   , runApp
   , runAppWithConfig
   , newEnv
+  , newEnvTest
+  , deleteEnv
   , runHerculesQueryWithConnection
   , runHerculesQueryWithConnectionSingular
   , runUpdateReturningWithConnection
@@ -40,6 +42,7 @@ import Crypto.Error
 import Crypto.JOSE.Error
 import Crypto.Random.Entropy
 import Data.ByteString.Extra           as BS (readFileMaybe, writeFile, ByteString)
+import qualified Data.ByteString.Char8 as S8 (pack)
 import Data.ByteString.Lazy            (toStrict)
 import Data.Int                        (Int64)
 import Data.List                       (find)
@@ -275,6 +278,35 @@ newEnv c@Config{..} authenticators =
             configDataPath
             githubKey
             webHookSecret
+
+-- | Create an app environment just for testing.
+newEnvTest :: MonadIO m => Config -> m (Maybe Env)
+newEnvTest c@Config{..} =
+  getHerculesConnection c >>= \case
+    Nothing -> pure Nothing
+    Just herculesConnection -> liftIO $ do
+      httpManager <- newManager tlsManagerSettings
+      jwtKey <- liftIO generateKey
+      cipherInit <$> generateNewKey >>= \case
+        CryptoFailed e -> do
+          sayErr ("Unable to create cipher" <> pack (show e))
+          pure Nothing
+        CryptoPassed cipher ->
+          pure . Just $ Env
+            herculesConnection
+            httpManager
+            []
+            (defaultJWTSettings jwtKey)
+            cipher
+            configPort
+            configHostname
+            configDataPath
+            (S8.pack <$> configGitHubWebHookSecretFile)
+            (S8.pack <$> configGitHubAppPrivateKeyFile)
+
+
+deleteEnv :: MonadIO m => Env -> m ()
+deleteEnv Env {..} = liftIO $ destroyAllResources envConnectionPool
 
 -- | Load a yaml configuration and run an 'App' value, useful for testing in
 -- the REPL.

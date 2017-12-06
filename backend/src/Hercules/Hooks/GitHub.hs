@@ -8,8 +8,7 @@
 
 module Hercules.Hooks.GitHub
   ( GitHubAppAPI
-  , gitHubWebHookPR
-  , gitHubWebHookPing
+  , gitHubAppApi
   , gitHubWebHookCtx
   , GitHubKey
   , PingRegistration(..)
@@ -24,7 +23,7 @@ import Data.Monoid
 import qualified Data.ByteString.Lazy as BL
 import Safe
 import Data.Foldable
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 
 import           GitHub.Data.PullRequests
 import           GitHub.Data.Statuses
@@ -46,7 +45,6 @@ import GitHub.Endpoints.PullRequests hiding (User)
 import Data.Swagger (ToSchema(..))
 import Servant
 import Servant.Swagger
-import Servant.Server
 import Servant.GitHub.Webhook
 import Data.Aeson
 
@@ -56,15 +54,18 @@ import Hercules.Query.Hercules
 import Hercules.Database.Hercules
 import Hercules.Encryption
 
-type GitHubAppAPI = "github" :> "webhook" :> (
-  GitHubEvent '[ 'WebhookPullRequestEvent ]
-    :> GitHubSignedReqBody '[JSON] PullRequestEvent
-    :> Post '[JSON] NoContent
-    :<|>
-  GitHubEvent '[ 'WebhookPingEvent ]
-    :> GitHubSignedReqBody '[JSON] PingRegistration
-    :> Post '[JSON] NoContent
-  )
+type GitHubAppAPI = "github" :> "registration" :> Get '[JSON] (Maybe GithubApp) :<|>
+  "github" :> "webhook" :> (
+    GitHubEvent '[ 'WebhookPullRequestEvent ]
+      :> GitHubSignedReqBody '[JSON] PullRequestEvent
+      :> Post '[JSON] NoContent
+      :<|>
+    GitHubEvent '[ 'WebhookPingEvent ]
+      :> GitHubSignedReqBody '[JSON] PingRegistration
+      :> Post '[JSON] NoContent
+    )
+
+gitHubAppApi = gitHubAppRegistration :<|> (gitHubWebHookPR :<|> gitHubWebHookPing)
 
 data PingRegistration = PingRegistration
                         { pingAppId :: Int
@@ -141,6 +142,9 @@ addBuild owner repo rev complete = return True
 gitHubWebHookCtx :: Env -> GitHubKey
 gitHubWebHookCtx = gitHubKey . pure . fromMaybe "" . envGitHubWebHookSecret
 
+gitHubAppRegistration :: App (Maybe GithubApp)
+gitHubAppRegistration = listToMaybe <$> runHerculesQueryWithConnection gitHubAppQuery
+
 ----------------------------------------------------------------------------
 -- all instances required to document webhook endpoints in swagger...
 
@@ -165,6 +169,3 @@ instance ToSchema (GH.Id GH.User)
 instance ToSchema (GH.Name GH.Owner)
 instance ToSchema (GH.Name GH.Repo)
 instance ToSchema (GH.Name GH.User)
-
-instance HasSwagger GitHubEvent where
-  toSwagger _ = undefined -- fixme: swagger landmine

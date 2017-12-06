@@ -27,6 +27,12 @@ rec {
 
           # supports apis we need (i think)
           github = super.github_0_18;
+
+          # https://github.com/NixOS/nixpkgs/pull/32324
+          tmp-postgres = pkgs.haskell.lib.overrideCabal super.tmp-postgres (drv: {
+            libraryToolDepends = [pkgs.postgresql];
+            testToolDepends = [pkgs.procps];
+          });
         };
       };
 

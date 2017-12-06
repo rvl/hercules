@@ -33,6 +33,7 @@ type Protected = "protected" :> Get '[JSON] Text
 
 type QueryAPI = Unprotected
       :<|> Auth '[JWT] UserId :> Protected
+      :<|> GitHubAppAPI
 
 -- | A bunch of pages used for debugging and examples
 type Pages = "login" :> Get '[HTML] Html
@@ -50,7 +51,6 @@ type Pages = "login" :> Get '[HTML] Html
         :<|> "repos" :> Auth '[JWT] UserId :> Get '[HTML] Html
 
 type API = (QueryAPI
-      :<|> GitHubAppAPI
       :<|> Pages
       -- TODO: Waiting for Servant to gain Redirect combinators,
       -- The return type is wrong, this endpoint always redirects

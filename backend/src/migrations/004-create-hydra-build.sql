@@ -31,8 +31,6 @@ CREATE FUNCTION modifynrbuildsfinished() RETURNS trigger
 $$;
 
 
-ALTER FUNCTION public.modifynrbuildsfinished() OWNER TO hydra;
-
 --
 -- Name: notifybuildbumped(); Type: FUNCTION; Schema: public; Owner: hydra
 --
@@ -41,8 +39,6 @@ CREATE FUNCTION notifybuildbumped() RETURNS trigger
     LANGUAGE plpgsql
     AS $$begin notify builds_bumped; return null; end;$$;
 
-
-ALTER FUNCTION public.notifybuildbumped() OWNER TO hydra;
 
 --
 -- Name: notifybuildcancelled(); Type: FUNCTION; Schema: public; Owner: hydra
@@ -53,8 +49,6 @@ CREATE FUNCTION notifybuildcancelled() RETURNS trigger
     AS $$begin notify builds_cancelled; return null; end;$$;
 
 
-ALTER FUNCTION public.notifybuildcancelled() OWNER TO hydra;
-
 --
 -- Name: notifybuildrestarted(); Type: FUNCTION; Schema: public; Owner: hydra
 --
@@ -63,8 +57,6 @@ CREATE FUNCTION notifybuildrestarted() RETURNS trigger
     LANGUAGE plpgsql
     AS $$begin notify builds_restarted; return null; end;$$;
 
-
-ALTER FUNCTION public.notifybuildrestarted() OWNER TO hydra;
 
 --
 -- Name: notifybuildsdeleted(); Type: FUNCTION; Schema: public; Owner: hydra
@@ -75,8 +67,6 @@ CREATE FUNCTION notifybuildsdeleted() RETURNS trigger
     AS $$begin notify builds_deleted; return null; end;$$;
 
 
-ALTER FUNCTION public.notifybuildsdeleted() OWNER TO hydra;
-
 --
 -- Name: notifyjobsetsadded(); Type: FUNCTION; Schema: public; Owner: hydra
 --
@@ -85,8 +75,6 @@ CREATE FUNCTION notifyjobsetsadded() RETURNS trigger
     LANGUAGE plpgsql
     AS $$begin notify jobsets_added; return null; end;$$;
 
-
-ALTER FUNCTION public.notifyjobsetsadded() OWNER TO hydra;
 
 --
 -- Name: notifyjobsetschedulingchanged(); Type: FUNCTION; Schema: public; Owner: hydra
@@ -97,8 +85,6 @@ CREATE FUNCTION notifyjobsetschedulingchanged() RETURNS trigger
     AS $$begin notify jobset_scheduling_changed; return null; end;$$;
 
 
-ALTER FUNCTION public.notifyjobsetschedulingchanged() OWNER TO hydra;
-
 --
 -- Name: notifyjobsetsdeleted(); Type: FUNCTION; Schema: public; Owner: hydra
 --
@@ -108,8 +94,6 @@ CREATE FUNCTION notifyjobsetsdeleted() RETURNS trigger
     AS $$begin notify jobsets_deleted; return null; end;$$;
 
 
-ALTER FUNCTION public.notifyjobsetsdeleted() OWNER TO hydra;
-
 --
 -- Name: notifyjobsetshareschanged(); Type: FUNCTION; Schema: public; Owner: hydra
 --
@@ -118,8 +102,6 @@ CREATE FUNCTION notifyjobsetshareschanged() RETURNS trigger
     LANGUAGE plpgsql
     AS $$begin notify jobset_shares_changed; return null; end;$$;
 
-
-ALTER FUNCTION public.notifyjobsetshareschanged() OWNER TO hydra;
 
 SET default_tablespace = '';
 
