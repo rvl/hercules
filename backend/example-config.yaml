@@ -6,8 +6,6 @@ databaseConnectionString: "postgresql://hydra@/hydra"
 dataPath: "/var/lib/hercules"
 
 # # Register own app at https://github.com/settings/developers
-# gitHubAuthInfo:
-#   id: 0123456789abcdef0123
-#   secret: 0123456789abcdef0123456789abcdef01234567
-# gitHubAppPrivateKeyFile: "github.pem"
-# gitHubWebHookSecretFile: "webook-secret.txt"
+# gitHubAuthInfo: id: 0123456789abcdef0123 secret:
+# 0123456789abcdef0123456789abcdef01234567 gitHubAppPrivateKeyFile:
+# "github.pem" gitHubWebHookSecretFile: "webhook-secret.key"

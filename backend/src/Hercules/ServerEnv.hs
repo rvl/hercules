@@ -41,8 +41,8 @@ import Crypto.Cipher.Types
 import Crypto.Error
 import Crypto.JOSE.Error
 import Crypto.Random.Entropy
-import Data.ByteString.Extra           as BS (readFileMaybe, writeFile, ByteString)
-import qualified Data.ByteString.Char8 as S8 (pack)
+import Data.ByteString.Extra           as BS (readFileMaybe, readFileEither, writeFile, ByteString)
+import qualified Data.ByteString.Char8 as S8
 import Data.ByteString.Lazy            (toStrict)
 import Data.Int                        (Int64)
 import Data.List                       (find)
@@ -276,8 +276,8 @@ newEnv c@Config{..} authenticators =
             configPort
             configHostname
             configDataPath
-            githubKey
             webHookSecret
+            githubKey
 
 -- | Create an app environment just for testing.
 newEnvTest :: MonadIO m => Config -> m (Maybe Env)
@@ -324,6 +324,12 @@ runAppWithConfig yaml m =
 
 loadKeyFile :: Maybe FilePath -> IO (Maybe ByteString)
 loadKeyFile Nothing = return Nothing
-loadKeyFile (Just f) = do
-  sayErr ("Trying to open: " <> pack f)
-  readFileMaybe f
+loadKeyFile (Just f) = readFileEither f >>= \case
+  Right k -> return . Just . firstLine $ k
+  Left e -> do
+      -- fixme: need to exit instead of ignoring empty key
+      sayErrString ("Failed to open " <> f <> ": " <> e)
+      return Nothing
+
+firstLine :: ByteString -> ByteString
+firstLine = S8.takeWhile (\c -> c /= '\n' && c /= '\r')

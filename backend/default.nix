@@ -6,4 +6,8 @@ with pkgs;
 
 haskellPackageGen {
   extraEnvPackages = [ opaleye-gen postgresql ];
+  override = attrs: {
+    testToolDepends = attrs.testToolDepends or [] ++ [ postgresql ];
+    buildInputs = attrs.buildInputs ++ [ postgresql ];
+  };
 } src

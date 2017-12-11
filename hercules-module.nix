@@ -288,7 +288,7 @@ in
       ''
         port: ${toString cfg.port}
         hostname: "${cfg.listenHost}"
-        accessLogLevel: Disabled
+        accessLogLevel: Enabled
         secretKeyFile: "${baseDir}/hercules/secret.key"
         databaseConnectionString: "${cfg.dbUrl}"
         dataPath: "${baseDir}"

@@ -41,6 +41,7 @@ rec {
   haskellPackageGen = { doFilter ? true
                       , doHaddock ? true
                       , extraEnvPackages ? [] # Any extra packages to be made available in the developer shell only
+                      , override ? null # optional override function for the package derivation
                       }: src:
     let filteredSrc = if builtins.typeOf src != "path" then src else
           builtins.filterSource (path: type:
@@ -54,7 +55,8 @@ rec {
             > $out
         '';
 
-        drv = haskellPackages.callPackage package {};
+        drv' = haskellPackages.callPackage package {};
+        drv = if override == null then drv' else pkgs.lib.overrideDerivation drv' override;
 
         envWithExtras = pkgs.lib.overrideDerivation drv.env (attrs: {
           buildInputs = attrs.buildInputs ++ extraEnvPackages;

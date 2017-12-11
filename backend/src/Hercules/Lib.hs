@@ -70,7 +70,7 @@ loggingMiddleware config = case configAccessLogLevel config of
 
 app :: Env -> IO Application
 app env = pure $ serveWithContext api (appContext env) (server env)
-  where  api = Proxy :: Proxy API
+  where api = Proxy :: Proxy API
 
 appContext :: Env -> Context '[GitHubKey, CookieSettings, JWTSettings]
 appContext env = gitHubWebHookCtx env :. defaultCookieSettings :. envJWTSettings env :. EmptyContext

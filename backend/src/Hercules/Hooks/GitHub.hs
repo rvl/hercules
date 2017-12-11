@@ -4,6 +4,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Hercules.Hooks.GitHub
@@ -24,6 +25,8 @@ import qualified Data.ByteString.Lazy as BL
 import Safe
 import Data.Foldable
 import Data.Maybe (fromMaybe, listToMaybe)
+import Control.Exception (throwIO)
+import GHC.Generics (Generic)
 
 import           GitHub.Data.PullRequests
 import           GitHub.Data.Statuses
@@ -69,7 +72,7 @@ gitHubAppApi = gitHubAppRegistration :<|> (gitHubWebHookPR :<|> gitHubWebHookPin
 
 data PingRegistration = PingRegistration
                         { pingAppId :: Int
-                        } deriving (Show)
+                        } deriving (Show, Generic)
 
 instance FromJSON PingRegistration where
   parseJSON v = PingRegistration <$> parseAppId v
@@ -140,13 +143,16 @@ addBuild :: Name Owner -> Name Repo -> Name Commit
 addBuild owner repo rev complete = return True
 
 gitHubWebHookCtx :: Env -> GitHubKey
-gitHubWebHookCtx = gitHubKey . pure . fromMaybe "" . envGitHubWebHookSecret
+gitHubWebHookCtx = gitHubKey . maybe crash pure . envGitHubWebHookSecret
+  where crash = fail "No GitHub webhook secret configured"
 
 gitHubAppRegistration :: App (Maybe GithubApp)
 gitHubAppRegistration = listToMaybe <$> runHerculesQueryWithConnection gitHubAppQuery
 
 ----------------------------------------------------------------------------
 -- all instances required to document webhook endpoints in swagger...
+
+instance ToSchema PingRegistration
 
 instance ToSchema GH.URL
 instance ToSchema GH.IssueState
