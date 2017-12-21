@@ -11,9 +11,11 @@ CREATE TABLE github_repos (
 );
 
 CREATE TABLE github_pull_requests (
-  number integer PRIMARY KEY NOT NULL,
+  number integer NOT NULL,
   repo_id integer NOT NULL REFERENCES github_repos(id) ON DELETE CASCADE,
-  title text NOT NULL
+  title text NOT NULL,
+  -- fixme: add pull request head
+  PRIMARY KEY (number, repo_id)
 );
 
 CREATE TABLE github_branches (

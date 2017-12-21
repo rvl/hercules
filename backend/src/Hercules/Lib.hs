@@ -10,6 +10,7 @@ module Hercules.Lib
   , server
   , appContext
   , appToHandler
+  , app
   ) where
 
 import Control.Monad                        (join)
@@ -42,13 +43,17 @@ import Hercules.Config
 import Hercules.Database.Extra       (JobsetNullable, Project,
                                       ProjectWithJobsets (..),
                                       fromNullableJobset, projectName)
+import Hercules.Database.Hercules    (GithubRepo(..), userGithubId, User(..))
 import Hercules.OAuth
 import Hercules.OAuth.Authenticators
 import Hercules.Query.Hydra
+import Hercules.Query.Hercules
 import Hercules.ServerEnv
 import Hercules.Static
 import Hercules.Swagger
 import Hercules.Hooks.GitHub
+import Hercules.Log
+import Hercules.Sync.GitHub
 
 startApp :: Config -> IO ()
 startApp config = do
@@ -94,13 +99,14 @@ server env = enter (appToHandler env) api :<|> serveSwagger
                 :<|> (mandatory1 .: loginPage)
                 :<|> (mandatory1 .∵ authCallback)
                 :<|> loggedInPage
-                :<|> (join . withAuthenticated userInfoPage)
+                :<|> (join . withAuthenticated' userInfoPage)
         queryApi = unprotected :<|> protected :<|> gitHubAppApi
         unprotected = getProjectNames
                       :<|> getProjects
                       :<|> getProject
                       :<|> getProjectsWithJobsets
-        protected = getUser
+        protected u = getUser u :<|> syncUserRepos u :<|> listRepos u :<|> repos u
+        repos u id = getRepo id :<|> updateRepo id :<|> triggerRepo id
 
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (.:) = (.) . (.)
@@ -116,14 +122,21 @@ serveSwagger :: Server (SwaggerSchemaUI "docs" "swagger.json")
 serveSwagger = swaggerSchemaUIServer swaggerDoc
 
 getUser :: AuthResult UserId -> App Text
-getUser = withAuthenticated (pack . show)
+getUser = withAuthenticated' (pack . show)
 
-withAuthenticated :: (a -> b) -> AuthResult a -> App b
-withAuthenticated f = \case
-  (Authenticated x) -> pure (f x)
-  _                 -> do
-    logNotice "Failed user authentication attempt"
-    throwError err401
+syncUserRepos :: AuthResult UserId -> App NoContent
+syncUserRepos ar = withAuthenticated ar $ \u -> do
+  syncAllReposByOwnerId u
+  return NoContent
+
+withAuthenticated' :: (a -> b) -> AuthResult a -> App b
+withAuthenticated' f = flip withAuthenticated (pure . f)
+
+withAuthenticated :: AuthResult a -> (a -> App b) -> App b
+withAuthenticated (Authenticated x) f = f x
+withAuthenticated _ _ = do
+  logNotice "Failed user authentication attempt"
+  throwError err401
 
 getProjectNames :: App [Text]
 getProjectNames = runHerculesQueryWithConnection projectNameQuery
@@ -149,3 +162,18 @@ groupSortOn :: Ord k => (a -> k) -> [(a, v)] -> [(a, NE.NonEmpty v)]
 groupSortOn f = fmap (\x -> (fst $ NE.head x, fmap snd x))
           . NE.groupWith (f . fst)
           . sortOn (f . fst)
+
+listRepos :: AuthResult UserId -> Maybe Bool -> App [GithubRepo]
+listRepos ar a = withAuthenticated ar $ \u ->
+  runHerculesQueryWithConnection $ reposQuery (Just u) a
+
+getRepo :: Int -> App GithubRepo
+getRepo repoId = do
+  r <- runHerculesQueryWithConnectionSingular (repoByIdQuery repoId)
+  maybe (throwError err404) return r
+
+updateRepo :: Int -> GithubRepo -> App GithubRepo
+updateRepo repoId r = throwError err500
+
+triggerRepo :: Int -> App NoContent
+triggerRepo repoId = throwError err500

@@ -17,6 +17,7 @@ import Servant.Swagger.UI
 import Text.Blaze.Html5
 
 import Hercules.Database.Extra       (Project, ProjectWithJobsets)
+import Hercules.Database.Hercules    (GithubRepo)
 import Hercules.OAuth.Authenticators (AuthenticatorName)
 import Hercules.OAuth.Types          (AuthClientState, AuthCode, AuthError,
                                       AuthStatePacked, FrontendURL)
@@ -29,7 +30,16 @@ type Unprotected =
  :<|> "project" :> Capture "projectName" Text :> Get '[JSON] (Maybe Project)
  :<|> "projectWithJobsets" :> Get '[JSON] [ProjectWithJobsets]
 
-type Protected = "protected" :> Get '[JSON] Text
+type Protected = "protected" :> (
+  "user" :> Get '[JSON] Text
+  :<|> "user" :> "sync_repos" :> Post '[JSON] NoContent
+  :<|> "repos" :> QueryParam "active" Bool :> Get '[JSON] [GithubRepo]
+  :<|> "repos" :> Capture "repoId" Int :> (
+      Get '[JSON] GithubRepo
+      :<|> ReqBody '[JSON] GithubRepo :> Post '[JSON] GithubRepo
+      :<|> "trigger" :> Post '[JSON] NoContent
+      )
+  )
 
 type QueryAPI = Unprotected
       :<|> Auth '[JWT] UserId :> Protected

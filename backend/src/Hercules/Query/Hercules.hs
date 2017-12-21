@@ -20,12 +20,18 @@ module Hercules.Query.Hercules
   , gitHubAppQuery
   , getGitHubAppId
   , setGitHubAppId
+  , reposQuery
+  , repoByIdQuery
+  , addUpdateGitHubRepos
+  , pullRequestByIdQuery
+  , addUpdateGitHubPullRequests
   ) where
 
 import Control.Arrow              (returnA)
-import Data.ByteString
+import Control.Monad (void)
+import Data.ByteString (ByteString)
 import Data.Maybe (listToMaybe)
-import Data.Text
+import Data.Text (Text)
 import Database.PostgreSQL.Simple (Connection, withTransaction)
 import Opaleye.Extra
 import Data.Time.Clock (getCurrentTime)
@@ -103,6 +109,30 @@ repoByIdQuery id = proc () -> do
   restrict -< githubRepoId r .== constant id
   returnA -< r
 
+reposQuery :: Maybe UserId -> Maybe Bool -> Query GithubRepoReadColumns
+reposQuery userId active = queryTable githubRepoTable -- fixme: filters
+
+addUpdateGitHubRepos :: Connection -> [GithubRepo] -> IO ()
+addUpdateGitHubRepos c rs = withTransaction c $ do
+  existing <- runQuery c (fmap githubRepoId (reposQuery Nothing Nothing))
+  let rs' = [pgGithubRepo r | r <- rs, Prelude.not . flip elem existing . githubRepoId $ r]
+  void $ runInsertMany c githubRepoTable rs'
+
+-- | Insert pull requests which don't already exist.
+-- fixme: update title of existing pull requests
+addUpdateGitHubPullRequests :: Connection -> [GithubPullRequest] -> IO ()
+addUpdateGitHubPullRequests c prs = withTransaction c $ do
+  existing <- runQuery c (githubPullRequestPK <$> queryTable githubPullRequestTable)
+  let prs' = [pgGithubPullRequest pr | pr <- prs, notElem (githubPullRequestPK pr) existing]
+  void $ runInsertMany c githubPullRequestTable prs'
+
+-- | Look up pull request by repo_id and PR #
+pullRequestByIdQuery :: Int -> Int -> Query GithubPullRequestReadColumns
+pullRequestByIdQuery repoId number = proc () -> do
+  pr <- queryTable githubPullRequestTable -< ()
+  restrict -< githubPullRequestRepoId pr .== constant repoId
+  restrict -< githubPullRequestNumber pr .== constant number
+  returnA -< pr
 
 -- | fixme: return if exists or count = 1
 jobExists :: Job -> Query (Column PGInt8)

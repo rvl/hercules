@@ -22,13 +22,14 @@ import GHC.TypeLits (KnownSymbol)
 
 import Hercules.API            (QueryAPI)
 import Hercules.Database.Extra
-import Hercules.Database.Hercules (GithubApp)
+import Hercules.Database.Hercules (GithubApp, GithubRepo)
 import Hercules.Hooks.GitHub
 
 instance ToSchema Project where
 instance ToSchema Jobset where
 instance ToSchema ProjectWithJobsets where
 instance ToSchema GithubApp where
+instance ToSchema GithubRepo
 
 instance HasSwagger sub => HasSwagger (GitHubEvent evs :> sub) where
   toSwagger _ = toSwagger (Proxy :: Proxy sub)

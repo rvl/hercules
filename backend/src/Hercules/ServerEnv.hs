@@ -213,15 +213,15 @@ getHerculesConnection Config{..} = liftIO $ do
 -- | Load the key from the secret key file if it exists or create one.
 getCipher :: MonadIO m => Config -> m (Maybe HerculesCipher)
 getCipher Config{..} = liftIO $ do
-  sayErr ("Trying to open key at: " <> pack configSecretKeyFile)
   key <- readFileMaybe configSecretKeyFile >>= \case
     Nothing -> do
-      sayErr ("Unable to open secret key file: " <> pack configSecretKeyFile)
+      sayErr ("Generating new secret key file: " <> pack configSecretKeyFile)
       bytes <- generateNewKey
-      sayErr ("Store generated key in file: " <> pack configSecretKeyFile)
       BS.writeFile configSecretKeyFile bytes
       pure bytes
-    Just key -> pure key
+    Just key -> do
+      sayErr ("Opened secret key at: " <> pack configSecretKeyFile)
+      pure key
 
   case cipherInit key of
     CryptoFailed e -> do
@@ -280,8 +280,8 @@ newEnv c@Config{..} authenticators =
             githubKey
 
 -- | Create an app environment just for testing.
-newEnvTest :: MonadIO m => Config -> m (Maybe Env)
-newEnvTest c@Config{..} =
+newEnvTest :: MonadIO m => Config -> [OAuth2Authenticator App] -> m (Maybe Env)
+newEnvTest c@Config{..} authenticators =
   getHerculesConnection c >>= \case
     Nothing -> pure Nothing
     Just herculesConnection -> liftIO $ do
@@ -295,7 +295,7 @@ newEnvTest c@Config{..} =
           pure . Just $ Env
             herculesConnection
             httpManager
-            []
+            authenticators
             (defaultJWTSettings jwtKey)
             cipher
             configPort

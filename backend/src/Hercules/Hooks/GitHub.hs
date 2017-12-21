@@ -27,6 +27,7 @@ import Data.Foldable
 import Data.Maybe (fromMaybe, listToMaybe)
 import Control.Exception (throwIO)
 import GHC.Generics (Generic)
+import Data.Vector (Vector)
 
 import           GitHub.Data.PullRequests
 import           GitHub.Data.Statuses
@@ -57,8 +58,7 @@ import Hercules.Query.Hercules
 import Hercules.Database.Hercules
 import Hercules.Encryption
 
-type GitHubAppAPI = "github" :> "registration" :> Get '[JSON] (Maybe GithubApp) :<|>
-  "github" :> "webhook" :> (
+type GitHubAppAPI = "github" :> "webhook" :> (
     GitHubEvent '[ 'WebhookPullRequestEvent ]
       :> GitHubSignedReqBody '[JSON] PullRequestEvent
       :> Post '[JSON] NoContent
@@ -66,9 +66,15 @@ type GitHubAppAPI = "github" :> "registration" :> Get '[JSON] (Maybe GithubApp) 
     GitHubEvent '[ 'WebhookPingEvent ]
       :> GitHubSignedReqBody '[JSON] PingRegistration
       :> Post '[JSON] NoContent
-    )
+      :<|>
+    -- fixme: these events/types don't exist in github package
+    GitHubEvent '[ 'WebhookWildcardEvent {- 'WebhookInstallationEvent 'WebhookIntegrationInstallationEvent -} ]
+      :> GitHubSignedReqBody '[JSON] IntegrationInstallation
+      :> Post '[JSON] NoContent
+    ) :<|>
+  "github" :> "registration" :> Get '[JSON] (Maybe GithubApp)
 
-gitHubAppApi = gitHubAppRegistration :<|> (gitHubWebHookPR :<|> gitHubWebHookPing)
+gitHubAppApi = (gitHubWebHookPR :<|> gitHubWebHookPing :<|> gitHubWebHookInstallation) :<|> gitHubAppRegistration
 
 data PingRegistration = PingRegistration
                         { pingAppId :: Int
@@ -90,7 +96,6 @@ gitHubWebHookPing _ (_, ev@PingRegistration{..}) = do
   logInfo . LogString $ "Received GitHub ping: " <> T.pack (show ev)
   withHerculesConnection $ \c -> setGitHubAppId c pingAppId
   return NoContent
-
 
 github :: GH.Auth -> GH.Request k a -> App (Either GH.Error a)
 github token req = withHttpManager (\mgr -> executeRequestWithMgr mgr token req)
@@ -148,6 +153,38 @@ gitHubWebHookCtx = gitHubKey . maybe crash pure . envGitHubWebHookSecret
 
 gitHubAppRegistration :: App (Maybe GithubApp)
 gitHubAppRegistration = listToMaybe <$> runHerculesQueryWithConnection gitHubAppQuery
+
+----------------------------------------------------------------------------
+-- Integration installation.
+-- When a github user enables the app.
+
+data IntegrationInstallation = IntegrationInstallation {
+  installationRepos :: [IntegrationRepo]
+  } deriving (Show, Generic)
+
+data IntegrationRepo = IntegrationRepo
+                       { integrationRepoId :: !(Id Repo)
+                       , integrationRepoName :: !(Name Repo)
+                       , integrationRepoFullName :: !Text
+                       } deriving (Show, Generic)
+
+instance FromJSON IntegrationInstallation where
+    parseJSON = withObject "integration event" $ \o ->
+      IntegrationInstallation <$> (o .: "repositories")
+
+instance FromJSON IntegrationRepo where
+  parseJSON = withObject "integration repo" $ \o ->
+    IntegrationRepo <$> o .: "id" <*> o .: "name" <*> o .: "full_name"
+
+gitHubWebHookInstallation :: RepoWebhookEvent -> ((), IntegrationInstallation) -> App NoContent
+gitHubWebHookInstallation _ (_, IntegrationInstallation{..}) = do
+  withHerculesConnection $ \c ->
+    addUpdateGitHubRepos c (map makeRepo installationRepos)
+  return NoContent
+  where
+    makeRepo IntegrationRepo{..} =
+      GithubRepo (untagId integrationRepoId) (untagName integrationRepoName)
+      integrationRepoFullName "" "" False
 
 ----------------------------------------------------------------------------
 -- all instances required to document webhook endpoints in swagger...

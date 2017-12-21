@@ -130,7 +130,7 @@ data GithubPullRequest' c1 c2 c3 =
     , githubPullRequestTitle :: c3
     }
 
-type GithubPullRequest = GithubPullRequest' Int32 Int32 Text
+type GithubPullRequest = GithubPullRequest' Int Int Text
 
 type GithubPullRequestReadColumns = GithubPullRequest' (Column PGInt4) (Column PGInt4) (Column PGText)
 
@@ -138,7 +138,7 @@ type GithubPullRequestWriteColumns = GithubPullRequest' (Column PGInt4) (Column 
 
 type GithubPullRequestNullableColumns = GithubPullRequest' (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText))
 
-type GithubPullRequestNullable = GithubPullRequest' (Maybe Int32) (Maybe Int32) (Maybe Text)
+type GithubPullRequestNullable = GithubPullRequest' (Maybe Int) (Maybe Int) (Maybe Text)
 
 fromNullableGithubPullRequest :: GithubPullRequestNullable -> Maybe GithubPullRequest
 fromNullableGithubPullRequest = fromNullable
@@ -189,6 +189,10 @@ githubRepoCacheTable = TableWithSchema "hercules" "github_repo_cache" (pGithubRe
     }
   )
 
+instance ToJSON GithubRepo where
+instance FromJSON GithubRepo where
+instance ElmType GithubRepo where
+
 ---- Types for table: github_repos ----
 
 data GithubRepo' c1 c2 c3 c4 c5 c6 =
@@ -199,9 +203,9 @@ data GithubRepo' c1 c2 c3 c4 c5 c6 =
     , githubRepoDefaultBranch :: c4
     , githubRepoRemoteUri :: c5
     , githubRepoEnabled :: c6
-    }
+    } deriving (Generic)
 
-type GithubRepo = GithubRepo' Int32 Text Text Text Text Bool
+type GithubRepo = GithubRepo' Int Text Text Text Text Bool
 
 type GithubRepoReadColumns = GithubRepo' (Column PGInt4) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
 
@@ -209,7 +213,7 @@ type GithubRepoWriteColumns = GithubRepo' (Maybe (Column PGInt4)) (Column PGText
 
 type GithubRepoNullableColumns = GithubRepo' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGBool))
 
-type GithubRepoNullable = GithubRepo' (Maybe Int32) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Bool)
+type GithubRepoNullable = GithubRepo' (Maybe Int) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Bool)
 
 fromNullableGithubRepo :: GithubRepoNullable -> Maybe GithubRepo
 fromNullableGithubRepo = fromNullable
@@ -605,12 +609,6 @@ githubAppTable = TableWithSchema "hercules" "github_app" (pGithubApp
     }
   )
 
-pgGithubApp :: GithubApp -> GithubAppWriteColumns
-pgGithubApp = pGithubApp GithubApp
-  { githubAppAppId = pgInt4
-  , githubAppUpdatedAt = pgUTCTime
-  }
-
 instance ToJSON GithubApp where
 instance ElmType GithubApp where
 
@@ -654,3 +652,29 @@ instance Default Constant Jobsetevalinput JobsetevalinputWriteColumns where
 
 pgNullableText :: Maybe Text -> Maybe (Column (Nullable PGText))
 pgNullableText = fmap (toNullable . pgStrictText)
+
+pgGithubRepo :: GithubRepo -> GithubRepoWriteColumns
+pgGithubRepo = pGithubRepo GithubRepo
+  { githubRepoId = const Nothing
+  , githubRepoName = pgStrictText
+  , githubRepoFullName = pgStrictText
+  , githubRepoDefaultBranch = pgStrictText
+  , githubRepoRemoteUri = pgStrictText
+  , githubRepoEnabled = pgBool
+  }
+
+pgGithubApp :: GithubApp -> GithubAppWriteColumns
+pgGithubApp = pGithubApp GithubApp
+  { githubAppAppId = pgInt4
+  , githubAppUpdatedAt = pgUTCTime
+  }
+
+pgGithubPullRequest :: GithubPullRequest -> GithubPullRequestWriteColumns
+pgGithubPullRequest = pGithubPullRequest GithubPullRequest
+  { githubPullRequestRepoId = pgInt4
+  , githubPullRequestNumber = pgInt4
+  , githubPullRequestTitle = pgStrictText
+  }
+
+githubPullRequestPK :: GithubPullRequest' n r t -> (r, n)
+githubPullRequestPK pr = (githubPullRequestRepoId pr, githubPullRequestNumber pr)
