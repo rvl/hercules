@@ -44,6 +44,8 @@ import Hercules.Lib (appContext, appToHandler)
 import Hercules.Hooks.GitHub
 import Hercules.Query.Hercules (getGitHubAppId)
 
+import TestEnv
+
 spec :: Spec
 spec = do
   beforeAll setupEnv $ afterAll teardownEnv $ do
@@ -127,32 +129,6 @@ withApp action TestEnv{..} = withApplication (app testEnv) action
 app :: Env -> Application
 app env = serveWithContext api (appContext env) (gitHubAppServer env)
   where api = Proxy :: Proxy GitHubAppAPI
-
-data TestEnv = TestEnv
-  { tempDB     :: Temp.DB
-  -- ^ Handle for temporary @postgres@ process
-  , testEnv :: Env
-  -- ^ Application environment
-  }
-
--- | Start a temporary @postgres@ process and hook up the app
-setupEnv :: IO TestEnv
-setupEnv = do
-  tempDB <- either throwIO return =<< Temp.startAndLogToTmp []
-  let connStr = T.pack (Temp.connectionString tempDB)
-  sayErr $ "Using temporary db: " <> connStr
-  let cfg = def { configDatabaseConnectionString = connStr
-                , configSecretKeyFile = "test_secret.key"
-                , configGitHubWebHookSecretFile = Just $ S8.unpack testKey }
-  Just testEnv <- newEnvTest cfg
-  return TestEnv {..}
-
-
--- | Drop all the connections and shutdown the @postgres@ process
-teardownEnv :: TestEnv -> IO ()
-teardownEnv TestEnv {..} = do
-  deleteEnv testEnv
-  void $ Temp.stop tempDB
 
 -- | Test the GitHub hook API by itself.
 gitHubAppServer :: Env -> Server GitHubAppAPI

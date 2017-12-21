@@ -41,7 +41,7 @@ configAuthenticatorList Config{..} = catMaybes
     makeCallback (AuthenticatorName name) =
       let authority = Authority Nothing (Host (encodeUtf8 configHostname)) (Just (Port configPort))
           path = "/auth-callback/" <> encodeUtf8 name
-      in URI (Scheme "http:") (Just authority) path mempty Nothing
+      in URI (Scheme "http") (Just authority) path mempty Nothing
 
 -- | Get the URL to redirect clients to with the given state to roundtrip
 authenticationURLWithState :: OAuth2Authenticator m -> AuthState -> UserAuthURL
