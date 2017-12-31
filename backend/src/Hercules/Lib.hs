@@ -43,7 +43,7 @@ import Hercules.Config
 import Hercules.Database.Extra       (JobsetNullable, Project,
                                       ProjectWithJobsets (..),
                                       fromNullableJobset, projectName)
-import Hercules.Database.Hercules    (GithubRepo(..), userGithubId, User(..))
+import Hercules.Database.Hercules    (GithubRepo, userGithubId, User(..))
 import Hercules.OAuth
 import Hercules.OAuth.Authenticators
 import Hercules.Query.Hydra
@@ -106,7 +106,7 @@ server env = enter (appToHandler env) api :<|> serveSwagger
                       :<|> getProject
                       :<|> getProjectsWithJobsets
         protected u = getUser u :<|> syncUserRepos u :<|> listRepos u :<|> repos u
-        repos u id = getRepo id :<|> updateRepo id :<|> triggerRepo id
+        repos u id = getRepo id :<|> updateRepo u id :<|> triggerRepo u id
 
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (.:) = (.) . (.)
@@ -172,8 +172,16 @@ getRepo repoId = do
   r <- runHerculesQueryWithConnectionSingular (repoByIdQuery repoId)
   maybe (throwError err404) return r
 
-updateRepo :: Int -> GithubRepo -> App GithubRepo
-updateRepo repoId r = throwError err500
+updateRepo :: AuthResult UserId -> Int -> GithubRepo -> App GithubRepo
+updateRepo ar repoId r = withAuthenticated ar $ \u -> do
+  -- fixme: check that user is owner of repo.
+  withHerculesConnection $ \c -> updateRepoEnabled c repoId r
+  getRepo repoId
 
-triggerRepo :: Int -> App NoContent
-triggerRepo repoId = throwError err500
+triggerRepo :: AuthResult UserId -> Int -> Text -> App NoContent
+triggerRepo ar repoId branchName = withAuthenticated ar $ \u -> do
+  repo <- getRepo repoId
+  (clonePath, spec) <- syncRepoBranch repo branchName
+  -- fixme: start evaluation
+  -- _doEvaluate repo branchName clonePath spec
+  return NoContent

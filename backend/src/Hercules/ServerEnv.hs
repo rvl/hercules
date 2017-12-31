@@ -40,8 +40,9 @@ import Crypto.Cipher.AES
 import Crypto.Cipher.Types
 import Crypto.Error
 import Crypto.JOSE.Error
+import Crypto.JOSE.JWK (JWK)
 import Crypto.Random.Entropy
-import Data.ByteString.Extra           as BS (readFileMaybe, readFileEither, writeFile, ByteString)
+import Data.ByteString.Extra           as BS (readFileMaybe, writeFile, ByteString)
 import qualified Data.ByteString.Char8 as S8
 import Data.ByteString.Lazy            (toStrict)
 import Data.Int                        (Int64)
@@ -74,6 +75,7 @@ import Hercules.OAuth.Types                 (AuthenticatorName,
                                              PackedJWT (..), authenticatorName)
 import Hercules.OAuth.User
 import Network.Wai.Handler.Warp             (Port)
+import Hercules.Keys
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 
@@ -86,7 +88,7 @@ data Env = Env { envConnectionPool      :: Pool Connection
                , envHostname            :: HostName
                , envDataPath            :: FilePath
                , envGitHubWebHookSecret :: Maybe ByteString
-               , envGitHubAppPrivateKey :: Maybe ByteString
+               , envGitHubAppPrivateKey :: Maybe JWK
                }
 
 -- | The cipher Hercues uses for encrypting the github access tokens
@@ -262,7 +264,7 @@ newEnv c@Config{..} authenticators =
       httpManager <- newManager tlsManagerSettings
       key <- liftIO generateKey
       let jwtSettings = defaultJWTSettings key
-      githubKey <- loadKeyFile configGitHubAppPrivateKeyFile
+      githubKey <- loadGitHubKey configGitHubAppPrivateKeyFile
       webHookSecret <- loadKeyFile configGitHubWebHookSecretFile
       getCipher c >>= \case
         Nothing -> pure Nothing
@@ -302,8 +304,7 @@ newEnvTest c@Config{..} authenticators =
             configHostname
             configDataPath
             (S8.pack <$> configGitHubWebHookSecretFile)
-            (S8.pack <$> configGitHubAppPrivateKeyFile)
-
+            Nothing
 
 deleteEnv :: MonadIO m => Env -> m ()
 deleteEnv Env {..} = liftIO $ destroyAllResources envConnectionPool
@@ -321,15 +322,3 @@ runAppWithConfig yaml m =
           runExceptT (runApp env m) >>= \case
             Left err -> error (show err)
             Right x -> pure x
-
-loadKeyFile :: Maybe FilePath -> IO (Maybe ByteString)
-loadKeyFile Nothing = return Nothing
-loadKeyFile (Just f) = readFileEither f >>= \case
-  Right k -> return . Just . firstLine $ k
-  Left e -> do
-      -- fixme: need to exit instead of ignoring empty key
-      sayErrString ("Failed to open " <> f <> ": " <> e)
-      return Nothing
-
-firstLine :: ByteString -> ByteString
-firstLine = S8.takeWhile (\c -> c /= '\n' && c /= '\r')

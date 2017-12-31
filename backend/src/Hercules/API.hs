@@ -37,7 +37,7 @@ type Protected = "protected" :> (
   :<|> "repos" :> Capture "repoId" Int :> (
       Get '[JSON] GithubRepo
       :<|> ReqBody '[JSON] GithubRepo :> Post '[JSON] GithubRepo
-      :<|> "trigger" :> Post '[JSON] NoContent
+      :<|> "trigger" :> Capture "branch" Text :> Post '[JSON] NoContent
       )
   )
 

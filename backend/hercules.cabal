@@ -18,6 +18,8 @@ library
   exposed-modules:     Control.Monad.Except.Extra
                        Data.Aeson.Extra
                        Data.ByteString.Extra
+                       GitHub.Data.Extra
+                       GitHub.Endpoints.Extra
                        Hercules.Lib
                        Hercules.API
                        Hercules.Config
@@ -35,6 +37,7 @@ library
                        Hercules.Hooks.GitHub
                        Hercules.Input.Git
                        Hercules.Input.NixHelper
+                       Hercules.Keys
                        Hercules.Log
                        Hercules.OAuth
                        Hercules.OAuth.Authenticators
@@ -67,6 +70,7 @@ library
                      , flock
                      , github
                      , hoauth2
+                     , HsOpenSSL
                      , http-client
                      , http-client-tls
                      , interpolatedstring-perl6

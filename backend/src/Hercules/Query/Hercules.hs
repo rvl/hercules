@@ -23,6 +23,7 @@ module Hercules.Query.Hercules
   , reposQuery
   , repoByIdQuery
   , addUpdateGitHubRepos
+  , updateRepoEnabled
   , pullRequestByIdQuery
   , addUpdateGitHubPullRequests
   ) where
@@ -117,6 +118,12 @@ addUpdateGitHubRepos c rs = withTransaction c $ do
   existing <- runQuery c (fmap githubRepoId (reposQuery Nothing Nothing))
   let rs' = [pgGithubRepo r | r <- rs, Prelude.not . flip elem existing . githubRepoId $ r]
   void $ runInsertMany c githubRepoTable rs'
+
+updateRepoEnabled :: Connection -> Int -> GithubRepo -> IO ()
+updateRepoEnabled c repoId e = void $ runUpdateEasy c githubRepoTable update p
+  where
+    update r = r { githubRepoEnabled = pgBool . githubRepoEnabled $ e }
+    p r = githubRepoId r .== pgInt4 repoId
 
 -- | Insert pull requests which don't already exist.
 -- fixme: update title of existing pull requests
