@@ -6,6 +6,8 @@ module Hercules.Evaluate.Spec
   ( BuildSpec(..)
   , InputSpec(..)
   , InputSpecs
+  , BuildNotification(..)
+  , CloneDepth(..)
   , inputSpecType
   , inputSpecValue
   , inputSpecUri
@@ -18,7 +20,7 @@ import Data.Text                  (Text)
 import qualified Data.Text as T
 import GHC.Generics
 import Data.Map                   (Map)
-import Network.URI                (URI, parseURI)
+import Network.URI                (URI, parseURI) -- fixme: use URI.ByteString
 
 import Hercules.Input.Git (CloneDepth(..))
 
@@ -93,12 +95,16 @@ instance FromJSON BuildSpec where
   parseJSON = withObject "BuildSpec" $ \o -> BuildSpec <$>
     o .:? "inputs" .!= mempty <*>
     o .: "jobset" <*>
-    o .:? "notifications" .!= mempty
+    o .:? "notifications" .!= mempty -- fixme: permit an object
 
 instance ToJSON BuildSpec where toJSON = genericToJSON prefixOptions
 
-instance FromJSON BuildNotification where parseJSON = genericParseJSON prefixOptions
-instance ToJSON BuildNotification where toJSON = genericToJSON prefixOptions
+instance FromJSON BuildNotification where
+  parseJSON = withObject "BuildNotifications" $ \o ->
+    BuildNotificationEmail <$> o .: "email"
+
+instance ToJSON BuildNotification where
+  toJSON (BuildNotificationEmail es) = object [ "email" .= toJSON es ]
 
 inputSpecType :: InputSpec -> Text
 inputSpecType (InputSpecGit _ _ _)            = "git"
