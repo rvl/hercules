@@ -404,7 +404,7 @@ in
         requires = [ "hercules-init.service" ];
         restartTriggers = [ hydraConf ];
         after = [ "hercules-init.service" "network.target" ];
-        path = with pkgs; [ nettools cfg.hydraPackage jq ];
+        path = with pkgs; [ cfg.herculesPackage cfg.hydraPackage nettools jq ];
         environment = env;
         serviceConfig =
           { ExecStart = "@${cfg.hydraPackage}/bin/hydra-evaluator hydra-evaluator";
