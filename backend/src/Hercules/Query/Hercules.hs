@@ -87,7 +87,7 @@ findJobsetQuery p j = proc () -> do
   restrict -< githubRepoName .== pgStrictText p .&& githubBranchName .== pgStrictText j
   returnA -< (r, b)
 
-jobsetByIdQuery :: Int -> Query JobsetReadColumns
+jobsetByIdQuery :: GithubBranchId -> Query JobsetReadColumns
 jobsetByIdQuery branchId = proc () -> do
   js <- queryTable jobsetTable -< ()
   restrict -< constant branchId .== jobsetBranchId js
@@ -98,13 +98,13 @@ jobsetRestriction :: JobsetId -> JobsetReadColumns -> Column PGBool
 jobsetRestriction jsId js = constant jsId .== jobsetBranchId js
 
 
-branchByIdQuery :: Int -> Query GithubBranchReadColumns
+branchByIdQuery :: GithubBranchId -> Query GithubBranchReadColumns
 branchByIdQuery id = proc () -> do
   b <- queryTable githubBranchTable -< ()
   restrict -< githubBranchId b .== constant id
   returnA -< b
 
-repoByIdQuery :: Int -> Query GithubRepoReadColumns
+repoByIdQuery :: GithubRepoId -> Query GithubRepoReadColumns
 repoByIdQuery id = proc () -> do
   r <- queryTable githubRepoTable -< ()
   restrict -< githubRepoId r .== constant id

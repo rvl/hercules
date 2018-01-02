@@ -94,7 +94,11 @@ data GithubBranch' c1 c2 c3 c4 c5 c6 =
     , githubBranchPullRequestNumber :: c6
     }
 
-type GithubBranch = GithubBranch' Int32 Int32 Text Text JSON.Value (Maybe Int32)
+ -- fixme: newtypes for ids
+type GithubBranchId = Int
+type GithubRepoId = Int
+
+type GithubBranch = GithubBranch' GithubBranchId GithubRepoId Text Text JSON.Value (Maybe Int)
 
 type GithubBranchReadColumns = GithubBranch' (Column PGInt4) (Column PGInt4) (Column PGText) (Column PGText) (Column PGJsonb) (Column (Nullable PGInt4))
 
@@ -102,7 +106,7 @@ type GithubBranchWriteColumns = GithubBranch' (Maybe (Column PGInt4)) (Column PG
 
 type GithubBranchNullableColumns = GithubBranch' (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGJsonb)) (Column (Nullable PGInt4))
 
-type GithubBranchNullable = GithubBranch' (Maybe Int32) (Maybe Int32) (Maybe Text) (Maybe Text) (Maybe JSON.Value) (Maybe Int32)
+type GithubBranchNullable = GithubBranch' (Maybe GithubBranchId) (Maybe GithubRepoId) (Maybe Text) (Maybe Text) (Maybe JSON.Value) (Maybe Int)
 
 fromNullableGithubBranch :: GithubBranchNullable -> Maybe GithubBranch
 fromNullableGithubBranch = fromNullable
@@ -164,7 +168,7 @@ data GithubRepoCache' c1 c2 c3 c4 =
     , githubRepoCacheLastFetch :: c4
     }
 
-type GithubRepoCache = GithubRepoCache' Int32 Text (Maybe UTCTime) (Maybe UTCTime)
+type GithubRepoCache = GithubRepoCache' GithubRepoId Text (Maybe UTCTime) (Maybe UTCTime)
 
 type GithubRepoCacheReadColumns = GithubRepoCache' (Column PGInt4) (Column PGText) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz))
 
@@ -172,7 +176,7 @@ type GithubRepoCacheWriteColumns = GithubRepoCache' (Column PGInt4) (Column PGTe
 
 type GithubRepoCacheNullableColumns = GithubRepoCache' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz))
 
-type GithubRepoCacheNullable = GithubRepoCache' (Maybe Int32) (Maybe Text) (Maybe UTCTime) (Maybe UTCTime)
+type GithubRepoCacheNullable = GithubRepoCache' (Maybe GithubRepoId) (Maybe Text) (Maybe UTCTime) (Maybe UTCTime)
 
 fromNullableGithubRepoCache :: GithubRepoCacheNullable -> Maybe GithubRepoCache
 fromNullableGithubRepoCache = fromNullable
@@ -205,7 +209,7 @@ data GithubRepo' c1 c2 c3 c4 c5 c6 =
     , githubRepoEnabled :: c6
     } deriving (Generic)
 
-type GithubRepo = GithubRepo' Int Text Text Text Text Bool
+type GithubRepo = GithubRepo' GithubRepoId Text Text Text Text Bool
 
 type GithubRepoReadColumns = GithubRepo' (Column PGInt4) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
 
@@ -213,7 +217,7 @@ type GithubRepoWriteColumns = GithubRepo' (Maybe (Column PGInt4)) (Column PGText
 
 type GithubRepoNullableColumns = GithubRepo' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGBool))
 
-type GithubRepoNullable = GithubRepo' (Maybe Int) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Bool)
+type GithubRepoNullable = GithubRepo' (Maybe GithubRepoId) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Bool)
 
 fromNullableGithubRepo :: GithubRepoNullable -> Maybe GithubRepo
 fromNullableGithubRepo = fromNullable
@@ -240,7 +244,9 @@ data Job' c1 c2 =
     , jobName :: c2
     }
 
-type Job = Job' Int32 Text
+type JobsetId = Int -- fixme: newtypes for ids
+
+type Job = Job' JobsetId Text
 
 type JobReadColumns = Job' (Column PGInt4) (Column PGText)
 
@@ -248,7 +254,7 @@ type JobWriteColumns = Job' (Column PGInt4) (Column PGText)
 
 type JobNullableColumns = Job' (Column (Nullable PGInt4)) (Column (Nullable PGText))
 
-type JobNullable = Job' (Maybe Int32) (Maybe Text)
+type JobNullable = Job' (Maybe JobsetId) (Maybe Text)
 
 fromNullableJob :: JobNullable -> Maybe Job
 fromNullableJob = fromNullable
@@ -276,8 +282,6 @@ data Jobset' c1 c2 c3 c4 c5 c6 c7 =
     , jobsetStarttime :: c7
     } deriving (Generic)
 
-type JobsetId = Int32 -- fixme: newtypes for ids
-
 type Jobset = Jobset' JobsetId (Maybe Text) (Maybe UTCTime) (Maybe UTCTime) (Maybe UTCTime) (Maybe Text) (Maybe UTCTime)
 
 type JobsetReadColumns = Jobset' (Column PGInt4) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz))
@@ -286,7 +290,7 @@ type JobsetWriteColumns = Jobset' (Column PGInt4) (Maybe (Column (Nullable PGTex
 
 type JobsetNullableColumns = Jobset' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGTimestamptz)) (Column (Nullable PGText)) (Column (Nullable PGTimestamptz))
 
-type JobsetNullable = Jobset' (Maybe Int32) (Maybe Text) (Maybe UTCTime) (Maybe UTCTime) (Maybe UTCTime) (Maybe Text) (Maybe UTCTime)
+type JobsetNullable = Jobset' (Maybe JobsetId) (Maybe Text) (Maybe UTCTime) (Maybe UTCTime) (Maybe UTCTime) (Maybe Text) (Maybe UTCTime)
 
 fromNullableJobset :: JobsetNullable -> Maybe Jobset
 fromNullableJobset = fromNullable
@@ -358,7 +362,9 @@ data Jobseteval' c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 =
     , jobsetevalNrsucceeded  :: c10
     }
 
-type Jobseteval = Jobseteval' Int Text Int Int Int Int Int Text (Maybe Int) (Maybe Int)
+type JobsetevalId = Int
+
+type Jobseteval = Jobseteval' JobsetevalId Text Int Int Int Int Int Text (Maybe Int) (Maybe Int)
 
 type JobsetevalReadColumns = Jobseteval' (Column PGInt4) (Column PGText) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGInt4) (Column PGText) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
 
@@ -366,7 +372,7 @@ type JobsetevalWriteColumns = Jobseteval' (Maybe (Column PGInt4)) (Column PGText
 
 type JobsetevalNullableColumns = Jobseteval' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGInt4))
 
-type JobsetevalNullable = Jobseteval' (Maybe Int) (Maybe Text) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Text) (Maybe Int) (Maybe Int)
+type JobsetevalNullable = Jobseteval' (Maybe JobsetevalId) (Maybe Text) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Int) (Maybe Text) (Maybe Int) (Maybe Int)
 
 fromNullableJobseteval :: JobsetevalNullable -> Maybe Jobseteval
 fromNullableJobseteval = fromNullable
@@ -405,7 +411,7 @@ data Jobsetevalinput' c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 =
     , jobsetevalinputSha256Hash :: c10
     }
 
-type Jobsetevalinput = Jobsetevalinput' Int32 Text Int Text (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int) (Maybe Text) (Maybe Text)
+type Jobsetevalinput = Jobsetevalinput' JobsetevalId Text Int Text (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int) (Maybe Text) (Maybe Text)
 
 type JobsetevalinputReadColumns = Jobsetevalinput' (Column PGInt4) (Column PGText) (Column PGInt4) (Column PGText) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText))
 
@@ -413,7 +419,7 @@ type JobsetevalinputWriteColumns = Jobsetevalinput' (Column PGInt4) (Column PGTe
 
 type JobsetevalinputNullableColumns = Jobsetevalinput' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText))
 
-type JobsetevalinputNullable = Jobsetevalinput' (Maybe Int32) (Maybe Text) (Maybe Int) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int) (Maybe Text) (Maybe Text)
+type JobsetevalinputNullable = Jobsetevalinput' (Maybe JobsetevalId) (Maybe Text) (Maybe Int) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int) (Maybe Text) (Maybe Text)
 
 fromNullableJobsetevalinput :: JobsetevalinputNullable -> Maybe Jobsetevalinput
 fromNullableJobsetevalinput = fromNullable
@@ -653,6 +659,9 @@ instance Default Constant Jobsetevalinput JobsetevalinputWriteColumns where
 pgNullableText :: Maybe Text -> Maybe (Column (Nullable PGText))
 pgNullableText = fmap (toNullable . pgStrictText)
 
+pgNullableTimestamp :: Maybe UTCTime -> Maybe (Column (Nullable PGTimestamptz))
+pgNullableTimestamp = fmap (toNullable . pgUTCTime)
+
 pgGithubRepo :: GithubRepo -> GithubRepoWriteColumns
 pgGithubRepo = pGithubRepo GithubRepo
   { githubRepoId = const Nothing
@@ -661,6 +670,16 @@ pgGithubRepo = pGithubRepo GithubRepo
   , githubRepoDefaultBranch = pgStrictText
   , githubRepoRemoteUri = pgStrictText
   , githubRepoEnabled = pgBool
+  }
+
+pgGithubBranch :: GithubBranch -> GithubBranchWriteColumns
+pgGithubBranch = pGithubBranch GithubBranch
+  { githubBranchId = const Nothing
+  , githubBranchRepoId = pgInt4
+  , githubBranchName = pgStrictText
+  , githubBranchRev = pgStrictText
+  , githubBranchSpec = pgValueJSONB
+  , githubBranchPullRequestNumber = fmap (toNullable . pgInt4)
   }
 
 pgGithubApp :: GithubApp -> GithubAppWriteColumns
@@ -678,3 +697,22 @@ pgGithubPullRequest = pGithubPullRequest GithubPullRequest
 
 githubPullRequestPK :: GithubPullRequest' n r t -> (r, n)
 githubPullRequestPK pr = (githubPullRequestRepoId pr, githubPullRequestNumber pr)
+
+pgGithubRepoCache :: GithubRepoCache -> GithubRepoCacheWriteColumns
+pgGithubRepoCache = pGithubRepoCache GithubRepoCache
+  { githubRepoCacheRepoId = pgInt4
+  , githubRepoCachePath = pgStrictText
+  , githubRepoCacheStartFetch = pgNullableTimestamp
+  , githubRepoCacheLastFetch = pgNullableTimestamp
+  }
+
+pgJobset :: Jobset -> JobsetWriteColumns
+pgJobset = pJobset Jobset
+  { jobsetBranchId = pgInt4
+  , jobsetErrormsg = pgNullableText
+  , jobsetErrortime = pgNullableTimestamp
+  , jobsetLastcheckedtime = pgNullableTimestamp
+  , jobsetTriggertime = pgNullableTimestamp
+  , jobsetFetcherrormsg = pgNullableText
+  , jobsetStarttime = pgNullableTimestamp
+  }

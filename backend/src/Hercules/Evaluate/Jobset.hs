@@ -140,7 +140,7 @@ createBuilds js jobs src buildInputs argsHash checkoutTime evalTime conn = withT
            , jobsetevalNrsucceeded  = Nothing
            }
 
-  [evId] <- runInsertManyReturning conn jobsetevalTable [pgJobseteval ev] jobsetevalId :: IO [Int32]
+  [evId] <- runInsertManyReturning conn jobsetevalTable [pgJobseteval ev] jobsetevalId :: IO [Int]
 
   if jobsetChanged
     then do
