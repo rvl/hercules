@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-|
 A module to handle the different queries we might want to make to Hercules's
@@ -26,16 +27,22 @@ module Hercules.Query.Hercules
   , updateRepoEnabled
   , pullRequestByIdQuery
   , addUpdateGitHubPullRequests
+  , updateGitHubRepoCache
+  , updateJobsetBranch
   ) where
 
 import Control.Arrow              (returnA)
-import Control.Monad (void)
+import Control.Monad (void, when)
+import Control.Applicative
 import Data.ByteString (ByteString)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (listToMaybe, catMaybes)
+import Data.List (find)
 import Data.Text (Text)
+import qualified Data.Text as T
 import Database.PostgreSQL.Simple (Connection, withTransaction)
 import Opaleye.Extra
 import Data.Time.Clock (getCurrentTime)
+import Data.Aeson (Value)
 
 import Hercules.Database.Hercules
 import Hercules.OAuth.User
@@ -110,14 +117,34 @@ repoByIdQuery id = proc () -> do
   restrict -< githubRepoId r .== constant id
   returnA -< r
 
+branchByNameQuery :: GithubRepoId -> Text -> Query GithubBranchReadColumns
+branchByNameQuery repoId branchName = proc () -> do
+  b <- queryTable githubBranchTable -< ()
+  restrict -< githubBranchRepoId b .== constant repoId
+  restrict -< githubBranchName b .== constant branchName
+  returnA -< b
+
 reposQuery :: Maybe UserId -> Maybe Bool -> Query GithubRepoReadColumns
 reposQuery userId active = queryTable githubRepoTable -- fixme: filters
 
-addUpdateGitHubRepos :: Connection -> [GithubRepo] -> IO ()
+restrictReposByIds :: [GithubRepoId] -> QueryArr GithubRepoReadColumns ()
+restrictReposByIds rs = proc r -> do
+  restrict -< in_ (map constant rs) (githubRepoId r)
+
+addUpdateGitHubRepos :: Connection -> [GithubRepo] -> IO [GithubRepo]
 addUpdateGitHubRepos c rs = withTransaction c $ do
-  existing <- runQuery c (fmap githubRepoId (reposQuery Nothing Nothing))
-  let rs' = [pgGithubRepo r | r <- rs, Prelude.not . flip elem existing . githubRepoId $ r]
-  void $ runInsertMany c githubRepoTable rs'
+  let q = proc () -> do
+        r <- reposQuery Nothing Nothing -< ()
+        restrictReposByIds (map githubRepoId rs) -< r
+        returnA -< r
+  existing <- runQuery c q :: IO [GithubRepo]
+  let rs' = [pgGithubRepo r | r <- rs, githubRepoId r `notElem` map githubRepoId existing]
+  added <- runInsertManyReturning c githubRepoTable rs' id
+  return $ fixOrder githubRepoId rs (existing ++ added)
+
+-- fixme: will have awful performance
+fixOrder :: Eq x => (a -> x) -> [a] -> [a] -> [a]
+fixOrder f as us = catMaybes [find (\u -> f u == f a) us | a <- as]
 
 updateRepoEnabled :: Connection -> Int -> GithubRepo -> IO ()
 updateRepoEnabled c repoId e = void $ runUpdateEasy c githubRepoTable update p
@@ -132,6 +159,42 @@ addUpdateGitHubPullRequests c prs = withTransaction c $ do
   existing <- runQuery c (githubPullRequestPK <$> queryTable githubPullRequestTable)
   let prs' = [pgGithubPullRequest pr | pr <- prs, notElem (githubPullRequestPK pr) existing]
   void $ runInsertMany c githubPullRequestTable prs'
+
+githubRepoCacheById :: GithubRepoId -> Query GithubRepoCacheReadColumns
+githubRepoCacheById repoId = proc () -> do
+  r <- queryTable githubRepoCacheTable -< ()
+  restrict -< githubRepoCacheRepoId r .== constant repoId
+  returnA -< r
+
+updateGitHubRepoCache :: Connection -> GithubRepoId -> FilePath -> IO ()
+updateGitHubRepoCache c repoId clonePath = withTransaction c $ do
+  existing <- runQuery c (githubRepoCacheById repoId) :: IO [GithubRepoCache]
+  when (Prelude.null existing) $ void $ do
+    now <- getCurrentTime
+    let rc = GithubRepoCache repoId (T.pack clonePath) (Just now) (Just now)
+    runInsertMany c githubRepoCacheTable [pgGithubRepoCache rc]
+
+updateJobsetBranch :: Connection -> GithubRepoId -> Text -> Text -> Value -> IO GithubBranchId
+updateJobsetBranch c repoId branchName rev spec = do
+  branchId <- getOrCreateBranch c repoId branchName rev spec
+  createOrUpdateJobset c branchId
+  return branchId
+
+getOrCreateBranch :: Connection -> GithubRepoId -> Text -> Text -> Value -> IO GithubBranchId
+getOrCreateBranch c repoId branchName rev spec =
+  withTransaction c . fmap head $ get <|> create
+  where
+    get = runQuery c (githubBranchId <$> branchByNameQuery repoId branchName)
+    create = runInsertManyReturning c githubBranchTable [pgGithubBranch b] githubBranchId
+    b = GithubBranch 0 repoId branchName rev spec Nothing
+
+createOrUpdateJobset :: Connection -> GithubBranchId -> IO ()
+createOrUpdateJobset c branchId = withTransaction c $ do
+  existing <- runQuery c (jobsetByIdQuery branchId) :: IO [Jobset]
+  when (Prelude.null existing) $ void $ do
+    now <- getCurrentTime
+    let js = Jobset branchId Nothing Nothing Nothing (Just now) Nothing Nothing
+    runInsertMany c jobsetTable [pgJobset js]
 
 -- | Look up pull request by repo_id and PR #
 pullRequestByIdQuery :: Int -> Int -> Query GithubPullRequestReadColumns

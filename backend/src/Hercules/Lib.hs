@@ -181,7 +181,10 @@ updateRepo ar repoId r = withAuthenticated ar $ \u -> do
 triggerRepo :: AuthResult UserId -> Int -> Text -> App NoContent
 triggerRepo ar repoId branchName = withAuthenticated ar $ \u -> do
   repo <- getRepo repoId
-  (clonePath, spec) <- syncRepoBranch repo branchName
-  -- fixme: start evaluation
-  -- _doEvaluate repo branchName clonePath spec
+  (clonePath, rev, mspec) <- syncRepoBranch repo branchName
+  -- Start evaluation by adding a repo cache record
+  -- then creating/updating jobset which has trigger.
+  case mspec of
+    Nothing -> logInfo "Repo does not have a declarative configuration"
+    Just spec -> addJobsetGitHub repo branchName clonePath rev spec
   return NoContent

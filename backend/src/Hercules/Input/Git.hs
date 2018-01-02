@@ -7,6 +7,7 @@ module Hercules.Input.Git
   , getBuildSpec
   , fetchPullRequest
   , CloneDepth(..)
+  , getRevision
   ) where
 
 import Network.URI (URI)

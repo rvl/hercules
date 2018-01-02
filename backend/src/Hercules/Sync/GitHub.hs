@@ -5,6 +5,7 @@ module Hercules.Sync.GitHub
   , syncAllReposByOwnerId
   , syncRepo
   , syncRepoBranch
+  , addJobsetGitHub
   , PullRequest(..)
   ) where
 
@@ -14,6 +15,7 @@ import GitHub.Endpoints.Extra
 import Say
 import Data.Vector (Vector)
 import qualified Data.Vector as V
+import Data.Aeson (Value)
 import Data.ByteString(ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as S8
@@ -30,23 +32,25 @@ import Control.Monad.Except
 import Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
 import Network.URI (URI(..), URIAuth(..))
 import Control.Lens
+import Data.Yaml                (decodeEither', prettyPrintParseException)
 
 import Hercules.Database.Hercules (GithubRepo'(..), GithubRepo, GithubPullRequest'(..), userGithubId, User)
 import Hercules.Query.Hercules
 import Hercules.ServerEnv
 import Hercules.OAuth.User
 import Hercules.Log
-import Hercules.Input.Git (fetchRepoGit, getBuildSpec)
+import Hercules.Input.Git (fetchRepoGit, getBuildSpec, getRevision)
 
 -- | Sync all public repos for which the user is an owner.
 syncAllReposByOwner :: Name Owner -> App ()
 syncAllReposByOwner owner = do
   res <- liftIO $ userRepos owner RepoPublicityOwner
-  case res of
+  case fmap V.toList res of
     Right repos -> do
-      updateListRepos repos
-      mapM_ syncPullRequests repos
-      syncBranchList
+      repos' <- updateListRepos repos
+      let enabled = [r | (r, r') <- zip repos repos', githubRepoEnabled r']
+      mapM_ syncPullRequests enabled
+      mapM_ syncBranchList enabled
     Left err -> logError (gitHubErrMsg err)
   return ()
 
@@ -66,10 +70,10 @@ syncPullRequests Repo{..} = do
     Left err -> logError (gitHubErrMsg err)
 
 -- | Update database table with repos
-updateListRepos :: Vector Repo -> App ()
+updateListRepos :: [Repo] -> App [GithubRepo]
 updateListRepos rs = withHerculesConnection $ flip addUpdateGitHubRepos rs'
   where
-    rs' = map makeRepo (V.toList rs)
+    rs' = map makeRepo rs
     makeRepo r@Repo{..} = GithubRepo (untagId repoId) (untagName repoName)
                           (repoFullName r)
                           (fromMaybe "" repoDefaultBranch)
@@ -88,25 +92,41 @@ updateListPullRequests repo prs = withHerculesConnection $ flip addUpdateGitHubP
     prs' = map makePR (V.toList prs)
     makePR SimplePullRequest{..} = GithubPullRequest simplePullRequestNumber (untagId repo) simplePullRequestTitle
 
--- for all enabled repos, update their git clones and store branch names in db
-syncBranchList :: App ()
-syncBranchList = undefined
+syncBranchList :: Repo -> App ()
+syncBranchList Repo{..} = do
+  res <- liftIO $ branchesFor (simpleOwnerLogin repoOwner) repoName
+  case res of
+    Right bs -> return () -- fixme: implement sync to database
+    Left err -> logError (gitHubErrMsg err)
 
 -- fixme: runExceptT and ExceptT String App a
-syncRepo :: GithubRepo -> Text -> App FilePath
-syncRepo repo branchName = do
+syncRepo :: GithubRepo -> App FilePath
+syncRepo repo = do
   iss <- withHerculesConnection getGitHubAppId >>=
     maybe (fail "No app registered") (pure . mkId Proxy)
   jwt <- repoJWT iss
-  uri <- repoCloneURI repo iss jwt
-  liftIO $ fetchRepoGit uri
+  cloneUri <- repoCloneURI repo iss jwt
+  liftIO $ fetchRepoGit cloneUri
 
-syncRepoBranch :: GithubRepo -> Text -> App (FilePath, BL.ByteString)
+syncRepoBranch :: GithubRepo -> Text -> App (FilePath, Text, Maybe Value)
 syncRepoBranch repo branchName = do
-  clonePath <- syncRepo repo branchName
-  liftIO (getBuildSpec branchName clonePath) >>= \case
-    Left err -> fail err
-    Right spec -> return (clonePath, spec)
+  clonePath <- syncRepo repo
+  liftIO $ syncBranch branchName clonePath
+
+syncBranch :: Text -> FilePath -> IO (FilePath, Text, Maybe Value)
+syncBranch branchName clonePath = getBuildSpec branchName clonePath >>= \case
+  Left e -> fail e
+  Right yaml -> case decodeEither' (BL.toStrict yaml) of
+    Left e -> fail $ "parsing yaml: " ++ prettyPrintParseException e
+    Right spec -> getRevision branchName clonePath >>= \case
+      Nothing -> fail "Could not get head revision id from repo" -- fixme: more diagnostic info
+      Just rev -> return (clonePath, rev, spec)
+
+addJobsetGitHub :: GithubRepo -> Text -> FilePath -> Text -> Value -> App ()
+addJobsetGitHub repo branchName clonePath rev spec =
+  withHerculesConnection $ \c -> withTransaction c $ do
+    updateGitHubRepoCache c (githubRepoId repo) clonePath
+    void $ updateJobsetBranch c (githubRepoId repo) branchName rev spec
 
 repoCloneURI :: GithubRepo -> Id Installation -> SignedJWT -> App URI
 repoCloneURI repo appId jwt = do
@@ -125,8 +145,8 @@ repoJWT :: Id Installation -> App SignedJWT
 repoJWT appId = do
   claims <- repoJWTClaims appId
   asks envGitHubAppPrivateKey >>= \case
-    Just jwk -> do
-      res <- liftIO . runExceptT $ signClaims jwk (newJWSHeader ((), RS256)) claims
+    Just k -> do
+      res <- liftIO . runExceptT $ signClaims k (newJWSHeader ((), RS256)) claims
       -- fixme: better error handling, show error
       case res of
         Left (err :: JWTError) -> fail "Error signing GitHub request"
