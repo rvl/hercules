@@ -89,7 +89,12 @@ instance ToJSON InputSpec where
 buildInputToValue :: ToJSON a => Text -> a -> Value
 buildInputToValue t v = object [ "type" .= t, "value" .= toJSON v ]
 
-instance FromJSON BuildSpec where parseJSON = genericParseJSON prefixOptions
+instance FromJSON BuildSpec where
+  parseJSON = withObject "BuildSpec" $ \o -> BuildSpec <$>
+    o .:? "inputs" .!= mempty <*>
+    o .: "jobset" <*>
+    o .:? "notifications" .!= mempty
+
 instance ToJSON BuildSpec where toJSON = genericToJSON prefixOptions
 
 instance FromJSON BuildNotification where parseJSON = genericParseJSON prefixOptions
