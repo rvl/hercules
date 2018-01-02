@@ -54,4 +54,6 @@ migrations =
                     $(embedFile "src/migrations/005-create-hydra-views.sql")
   , MigrationScript "Create the GitHub app registration table"
                     $(embedFile "src/migrations/006-github-app.sql")
+  , MigrationScript "Create the hydra trigger functions"
+                    $(embedFile "src/migrations/007-create-hydra-triggers.sql")
   ]

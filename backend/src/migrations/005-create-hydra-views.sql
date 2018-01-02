@@ -4,7 +4,7 @@ SET search_path TO public;
 -- One project per repo.
 CREATE VIEW projects AS
     SELECT
-        name,
+        full_name AS name,
         name AS displayname,
         NULL::text AS description,
         enabled::integer AS enabled,
@@ -91,7 +91,7 @@ AS $function$
               triggertime=to_timestamp(NEW.triggertime),
               fetcherrormsg=NEW.fetcherrormsg,
               starttime=to_timestamp(NEW.starttime)
-              WHERE id=OLD.id;
+              WHERE branch_id=OLD.id;
        -- UPDATE person_job SET pid=NEW.pid, job=NEW.job WHERE pid=OLD.pid;
        -- RETURN NEW;
       END IF;

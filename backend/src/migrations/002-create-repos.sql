@@ -24,7 +24,8 @@ CREATE TABLE github_branches (
   name text NOT NULL, -- ref name
   rev text NOT NULL, -- TODO: maybe bytea(20)
   spec jsonb NOT NULL, -- contents of .hercules.yml
-  pull_request_number integer REFERENCES github_pull_requests(number) ON DELETE CASCADE,
+  pull_request_number integer,
+  FOREIGN KEY (pull_request_number, repo_id) REFERENCES github_pull_requests(number, repo_id) ON DELETE CASCADE,
   UNIQUE (repo_id, name)
 );
 

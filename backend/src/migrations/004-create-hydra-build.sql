@@ -66,34 +66,6 @@ CREATE FUNCTION notifybuildsdeleted() RETURNS trigger
     LANGUAGE plpgsql
     AS $$begin notify builds_deleted; return null; end;$$;
 
-
---
--- Name: notifyjobsetsadded(); Type: FUNCTION; Schema: public; Owner: hydra
---
-
-CREATE FUNCTION notifyjobsetsadded() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$begin notify jobsets_added; return null; end;$$;
-
-
---
--- Name: notifyjobsetschedulingchanged(); Type: FUNCTION; Schema: public; Owner: hydra
---
-
-CREATE FUNCTION notifyjobsetschedulingchanged() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$begin notify jobset_scheduling_changed; return null; end;$$;
-
-
---
--- Name: notifyjobsetsdeleted(); Type: FUNCTION; Schema: public; Owner: hydra
---
-
-CREATE FUNCTION notifyjobsetsdeleted() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$begin notify jobsets_deleted; return null; end;$$;
-
-
 --
 -- Name: notifyjobsetshareschanged(); Type: FUNCTION; Schema: public; Owner: hydra
 --
