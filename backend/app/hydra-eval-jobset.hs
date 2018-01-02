@@ -9,7 +9,9 @@ import Data.Text                (pack)
 import Data.Yaml                (decodeFileEither, prettyPrintParseException)
 import System.IO                (hPutStrLn, stderr)
 import Data.Maybe
-import Control.Monad.Except
+import Control.Error
+import Control.Monad (join)
+import Say
 
 import Hercules.Config
 import Hercules.ServerEnv
@@ -43,8 +45,10 @@ main = getArgs >>= \case
 
 checkJobsetIO :: String -> String -> Env -> IO ()
 checkJobsetIO projectName jobsetName env = do
-  res <- runExceptT $ runApp env (checkJobset (pack projectName) (pack jobsetName))
-  case res of
-    Left _ -> exitFailure
-    Right False -> exitFailure
-    Right True -> exitSuccess
+  res <- runExceptT . withExceptT show $
+    runApp env (checkJobset (pack projectName) (pack jobsetName))
+  case join res of
+    Left e -> do
+      sayErrString e
+      exitFailure
+    Right _ -> exitSuccess

@@ -107,6 +107,7 @@ library
                      , servant
                      , text
                      , time
+                     , transformers
                      , transformers-base
                      , typed-process
                      , uri-bytestring
@@ -152,7 +153,9 @@ executable hydra-eval-jobset
   build-depends:       base
                      , hercules
                      , bytestring
+                     , errors
                      , mtl
+                     , say
                      , text
                      , yaml
   default-language:    Haskell2010
@@ -195,6 +198,7 @@ test-suite test
                      , cryptonite
                      , data-default
                      , github
+                     , errors
                      , hercules
                      , hspec
                      , hspec-wai

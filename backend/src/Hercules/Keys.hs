@@ -58,9 +58,9 @@ tryIOScript = withExceptT showIOError . tryIO
 loadGitHubKey :: FilePath -> IO (Either String JWK)
 loadGitHubKey f = runExceptT $ do
   pem <- tryIOScript $ S8.readFile f
-  mk <- tryIOScript $ loadPEM pem
-  k <- hoistEither . note "Could not get private key from PEM" $ mk
-  return $ fromRSA k
+  mkey <- tryIOScript $ loadPEM pem
+  key <- hoistEither . note "Could not get private key from PEM" $ mkey
+  return $ fromRSA key
 
 -- a little bit silly
 hushOpt :: Monad m => (a -> m (Either e b)) -> Maybe a -> m (Maybe b)

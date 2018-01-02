@@ -11,6 +11,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Exception.Lifted
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Safe
 import Say
 import Data.Monoid
@@ -35,6 +36,7 @@ import Opaleye
 import System.Random.Shuffle (shuffleM)
 import System.FilePath ((</>))
 import Data.Ord (comparing)
+import Control.Error
 
 import Hercules.Evaluate.ReleaseExpr
 import Hercules.Evaluate.Fetch
@@ -321,32 +323,26 @@ checkUnchanged js argsHash = do
   where
     isUnchanged = maybe False ((== argsHash) . jobsetevalHash)
 
-checkJobset :: ProjectName -> JobsetName -> App Bool
-checkJobset p j = do
-  res <- withHerculesConnection $ lookupBranch p j
-  case res of
-    Just (repo, branch) -> do
-      case jobsetInfo repo branch of
-        Just js -> checkJobset' js
-        Nothing -> do
-          sayErr $ "specified jobset \"" <> p <> ":" <> j <> "\" is not enabled"
-          return False
-    Nothing -> do
-      sayErr $ "specified jobset \"" <> p <> ":" <> j <> "\" does not exist"
-      return False
+checkJobset :: ProjectName -> JobsetName -> App (Either String ())
+checkJobset p j = runExceptT $ do
+  let name = T.unpack (p <> ":" <> j)
+  res <- lift . withHerculesConnection $ lookupBranch p j
+  (repo, branch) <- hoistEither . note ("specified jobset \"" <> name <> "\" does not exist") $ res
+  js <- hoistEither . note ("specified jobset \"" <> name <> "\" is not enabled") $
+    jobsetInfo repo branch
+  checkJobset' js
 
-checkJobset' :: JobsetInfo -> App Bool
+checkJobset' :: JobsetInfo -> ExceptT String App ()
 checkJobset' js = do
-  jsId <- withHerculesConnection $ getOrCreateJobset js
-  res <- try (evaluateJobset js)
+  jsId <- lift . withHerculesConnection $ getOrCreateJobset js
+  res <- lift . try $ evaluateJobset js
   case res of
-    Left (err :: IOException) -> do
-      sayErrString $ "problem evaluating jobset " ++ show err
-      updateJobsetError (T.pack $ show err) (jobsetInfoId js)
-      return False
+    Left (e :: IOException) -> do
+      lift $ updateJobsetError (T.pack $ show e) (jobsetInfoId js)
+      fail $ "problem evaluating jobset " ++ show e
     Right ev -> do
-      withHerculesConnection $ updateJobsetCheckTime jsId
-      return True
+      lift . withHerculesConnection $ updateJobsetCheckTime jsId
+      return ()
 
 findJobsetOld :: ProjectName -> JobsetName -> App (Maybe (Jobset, GithubBranch, GithubRepo))
 findJobsetOld p j = runHerculesQueryWithConnectionSingular (findJobsetQueryOld p j)

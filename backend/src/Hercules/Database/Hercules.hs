@@ -213,7 +213,7 @@ type GithubRepo = GithubRepo' GithubRepoId Text Text Text Text Bool
 
 type GithubRepoReadColumns = GithubRepo' (Column PGInt4) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
 
-type GithubRepoWriteColumns = GithubRepo' (Maybe (Column PGInt4)) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
+type GithubRepoWriteColumns = GithubRepo' (Column PGInt4) (Column PGText) (Column PGText) (Column PGText) (Column PGText) (Column PGBool)
 
 type GithubRepoNullableColumns = GithubRepo' (Column (Nullable PGInt4)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGText)) (Column (Nullable PGBool))
 
@@ -227,7 +227,7 @@ $(makeAdaptorAndInstance "pGithubRepo" ''GithubRepo')
 githubRepoTable :: Table GithubRepoWriteColumns GithubRepoReadColumns
 githubRepoTable = TableWithSchema "hercules" "github_repos" (pGithubRepo
   GithubRepo
-    { githubRepoId = optional "id"
+    { githubRepoId = required "id"
     , githubRepoName = required "name"
     , githubRepoFullName = required "full_name"
     , githubRepoDefaultBranch = required "default_branch"
@@ -664,7 +664,7 @@ pgNullableTimestamp = fmap (toNullable . pgUTCTime)
 
 pgGithubRepo :: GithubRepo -> GithubRepoWriteColumns
 pgGithubRepo = pGithubRepo GithubRepo
-  { githubRepoId = const Nothing
+  { githubRepoId = pgInt4
   , githubRepoName = pgStrictText
   , githubRepoFullName = pgStrictText
   , githubRepoDefaultBranch = pgStrictText
