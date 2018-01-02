@@ -4,6 +4,7 @@
 module Hercules.Keys
   ( loadKeyFile
   , loadGitHubKey
+  , hushOpt
   ) where
 
 import Data.ByteString.Extra           as BS (readFileEither, ByteString)
@@ -15,6 +16,7 @@ import OpenSSL.PEM
 import OpenSSL.EVP.PKey
 import OpenSSL.RSA
 import Crypto.JOSE.JWK (JWK, fromRSA)
+import Control.Error
 
 import qualified Crypto.PubKey.RSA.Types as C
 
@@ -48,7 +50,19 @@ openSSLtoCryptonite k = C.PrivateKey
   (opt (rsaDMP1 k)) (opt (rsaDMQ1 k)) (opt (rsaIQMP k))
   where opt = fromMaybe 0
 
-loadGitHubKey :: Maybe FilePath -> IO (Maybe JWK)
-loadGitHubKey mf = loadKeyFile mf >>= \case
-  Nothing -> return Nothing
-  Just k -> fmap fromRSA <$> loadPEM k
+-- | Handle IO errors by simply converting the exception to a string
+tryIOScript :: IO a -> ExceptT String IO a
+tryIOScript = withExceptT showIOError . tryIO
+  where showIOError = show :: IOError -> String
+
+loadGitHubKey :: FilePath -> IO (Either String JWK)
+loadGitHubKey f = runExceptT $ do
+  pem <- tryIOScript $ S8.readFile f
+  mk <- tryIOScript $ loadPEM pem
+  k <- hoistEither . note "Could not get private key from PEM" $ mk
+  return $ fromRSA k
+
+-- a little bit silly
+hushOpt :: Monad m => (a -> m (Either e b)) -> Maybe a -> m (Maybe b)
+hushOpt _ Nothing = return Nothing
+hushOpt f (Just a) = hush <$> f a

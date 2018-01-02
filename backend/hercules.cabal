@@ -65,6 +65,7 @@ library
                      , cryptonite
                      , data-default
                      , directory
+                     , errors
                      , file-embed
                      , filepath
                      , flock
@@ -198,6 +199,8 @@ test-suite test
                      , hspec-wai-json
                      , http-client
                      , http-types
+                     , jose
+                     , lens
                      , memory
                      , mtl
                      , natural-transformation

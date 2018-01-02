@@ -264,7 +264,7 @@ newEnv c@Config{..} authenticators =
       httpManager <- newManager tlsManagerSettings
       key <- liftIO generateKey
       let jwtSettings = defaultJWTSettings key
-      githubKey <- loadGitHubKey configGitHubAppPrivateKeyFile
+      githubKey <- hushOpt loadGitHubKey configGitHubAppPrivateKeyFile
       webHookSecret <- loadKeyFile configGitHubWebHookSecretFile
       getCipher c >>= \case
         Nothing -> pure Nothing
