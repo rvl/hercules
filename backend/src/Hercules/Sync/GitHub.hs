@@ -5,6 +5,7 @@ module Hercules.Sync.GitHub
   , syncAllReposByOwnerId
   , syncRepo
   , syncRepoBranch
+  , gitHubAppRepoURI
   , addJobsetGitHub
   , PullRequest(..)
   ) where
@@ -99,14 +100,18 @@ syncBranchList Repo{..} = do
     Right bs -> return () -- fixme: implement sync to database
     Left err -> logError (gitHubErrMsg err)
 
--- fixme: runExceptT and ExceptT String App a
-syncRepo :: GithubRepo -> App FilePath
-syncRepo repo = do
+-- | Get an authenticated HTTP clone URI for the app integration and
+-- github repo.
+gitHubAppRepoURI :: GithubRepo -> App URI
+gitHubAppRepoURI repo = do
   iss <- withHerculesConnection getGitHubAppId >>=
     maybe (fail "No app registered") (pure . mkId Proxy)
   jwt <- repoJWT iss
-  cloneUri <- repoCloneURI repo iss jwt
-  liftIO $ fetchRepoGit cloneUri
+  repoCloneURI repo iss jwt
+
+-- fixme: runExceptT and ExceptT String App a
+syncRepo :: GithubRepo -> App FilePath
+syncRepo repo = gitHubAppRepoURI repo >>= liftIO . fetchRepoGit
 
 syncRepoBranch :: GithubRepo -> Text -> App (FilePath, Text, Maybe Value)
 syncRepoBranch repo branchName = do

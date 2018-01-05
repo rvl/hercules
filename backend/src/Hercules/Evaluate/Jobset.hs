@@ -42,6 +42,7 @@ import Hercules.Evaluate.ReleaseExpr
 import Hercules.Evaluate.Fetch
 import qualified Hercules.Database.Hydra as Hydra
 import Hercules.Query.Hydra
+import Hercules.Sync.GitHub (gitHubAppRepoURI)
 
 data JobsetInfo = JobsetInfo { infoRepo :: GithubRepo
                              , infoBranch :: GithubBranch
@@ -63,7 +64,7 @@ jobsetInfoKey js = jobsetInfoProject js <> ":" <> jobsetName js
 evaluateJobset :: JobsetInfo -> App ()
 evaluateJobset js@(JobsetInfo repo branch spec) = do
   ((src, buildInputs), checkoutTime) <- timeAction $ do
-    src <- fetchJobsetSource repo branch
+    src <- fetchJobsetSource repo branch spec
     buildInputs <- fetchInputs (githubRepoName repo) (githubBranchName branch) (buildInputs spec)
     return (src, buildInputs)
 
@@ -305,8 +306,11 @@ data JobsetSource = JobsetSource
   , srcBuildSpec    :: BuildSpec
   } deriving (Show, Eq)
 
-fetchJobsetSource :: GithubRepo -> GithubBranch -> App JobsetSource
-fetchJobsetSource repo branch = undefined
+fetchJobsetSource :: GithubRepo -> GithubBranch -> BuildSpec -> App JobsetSource
+fetchJobsetSource repo branch spec = do
+  uri <- gitHubAppRepoURI repo
+  FetchInputGit{..} <- liftIO $ fetchInputGit uri CloneDeep (Just (githubBranchName branch))
+  return $ JobsetSource fetchGitStorePath fetchGitSHA256Hash spec
 
 -- | Find previous evaluation and its number of builds
 getPrevJobsetEval :: Bool -> JobsetId -> Connection -> IO (Maybe Jobseteval)
@@ -342,7 +346,7 @@ checkJobset' js = do
       fail $ "problem evaluating jobset " ++ show e
     Right ev -> do
       lift . withHerculesConnection $ updateJobsetCheckTime jsId
-      return ()
+      return ev
 
 findJobsetOld :: ProjectName -> JobsetName -> App (Maybe (Jobset, GithubBranch, GithubRepo))
 findJobsetOld p j = runHerculesQueryWithConnectionSingular (findJobsetQueryOld p j)

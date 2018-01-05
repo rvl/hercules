@@ -32,7 +32,7 @@ module Hercules.Query.Hercules
   ) where
 
 import Control.Arrow              (returnA)
-import Control.Monad (void, when)
+import Control.Monad (void, when, liftM2)
 import Control.Applicative
 import Data.ByteString (ByteString)
 import Data.Maybe (listToMaybe, catMaybes)
@@ -182,7 +182,7 @@ updateJobsetBranch c repoId branchName rev spec = do
 
 getOrCreateBranch :: Connection -> GithubRepoId -> Text -> Text -> Value -> IO GithubBranchId
 getOrCreateBranch c repoId branchName rev spec =
-  withTransaction c . fmap head $ get <|> create
+  withTransaction c . fmap head $ liftM2 (<|>) get create
   where
     get = runQuery c (githubBranchId <$> branchByNameQuery repoId branchName)
     create = runInsertManyReturning c githubBranchTable [pgGithubBranch b] githubBranchId
