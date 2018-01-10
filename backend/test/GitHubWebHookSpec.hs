@@ -98,7 +98,7 @@ testKey :: ByteString
 testKey = "9dcc1cab304e6f340f56682fbeb6f9f54b80d0c0"
 
 getPingRequest :: IO BL.ByteString
-getPingRequest = BL.readFile "test/webhook-ping.json"
+getPingRequest = BL.readFile "test/data/webhook-ping.json"
 
 signedPingHeaders :: BL.ByteString -> [Header]
 signedPingHeaders ping = (signatureHeader ping:pingHeaders)

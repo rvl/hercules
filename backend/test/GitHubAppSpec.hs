@@ -16,7 +16,7 @@ spec :: Spec
 spec = do
   describe "Loading GitHub App private key" $ do
     it "can load the key" $ do
-      Right k <- loadGitHubKey "test/github-app.pem"
+      Right k <- loadGitHubKey "test/data/github-app.pem"
       let RSAKeyMaterial rsa = k ^. jwkMaterial
       (rsaD <$> rsa ^. rsaPrivateKeyParameters) `shouldBe` Just testD
     it "fails to load non-existent file" $ do
