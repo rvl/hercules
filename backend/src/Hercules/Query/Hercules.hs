@@ -29,6 +29,7 @@ module Hercules.Query.Hercules
   , addUpdateGitHubPullRequests
   , updateGitHubRepoCache
   , updateJobsetBranch
+  , addInstallation
   ) where
 
 import Control.Arrow              (returnA)
@@ -182,7 +183,7 @@ updateJobsetBranch c repoId branchName rev spec = do
 
 getOrCreateBranch :: Connection -> GithubRepoId -> Text -> Text -> Value -> IO GithubBranchId
 getOrCreateBranch c repoId branchName rev spec =
-  withTransaction c . fmap head $ liftM2 (<|>) get create
+  withTransaction c . fmap head $ get `orElse` create
   where
     get = runQuery c (githubBranchId <$> branchByNameQuery repoId branchName)
     create = runInsertManyReturning c githubBranchTable [pgGithubBranch b] githubBranchId
@@ -232,3 +233,19 @@ setGitHubAppId c appId = withTransaction c $ do
   _ <- runDelete c githubAppTable (const $ pgBool True)
   _ <- runInsertMany c githubAppTable [pgGithubApp (GithubApp appId now)]
   return ()
+
+orElse :: (Monad m, Alternative n) => m (n a) -> m (n a) -> m (n a)
+orElse = liftM2 (<|>)
+
+addInstallation :: Connection -> Int -> Int -> Int -> IO ()
+addInstallation c inst app account = void . withTransaction c $ get `orElse` create
+  where
+    get = runQuery c (installationByIdQuery inst) -- fixme: implement
+    create = runInsertManyReturning c githubInstallationTable [pgGithubInstallation i] id :: IO [GithubInstallation]
+    i = GithubInstallation inst app account
+
+installationByIdQuery :: Int -> Query GithubInstallationReadColumns
+installationByIdQuery instId = proc () -> do
+  inst <- queryTable githubInstallationTable -< ()
+  restrict -< githubInstallationId inst .== constant instId
+  returnA -< inst

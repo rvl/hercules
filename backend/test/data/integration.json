@@ -1,0 +1,222 @@
+{
+  "action": "created",
+  "installation": {
+    "id": 73241,
+    "account": {
+      "login": "rvl",
+      "id": 1019641,
+      "avatar_url": "https://avatars3.githubusercontent.com/u/1019641?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/rvl",
+      "html_url": "https://github.com/rvl",
+      "followers_url": "https://api.github.com/users/rvl/followers",
+      "following_url": "https://api.github.com/users/rvl/following{/other_user}",
+      "gists_url": "https://api.github.com/users/rvl/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/rvl/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/rvl/subscriptions",
+      "organizations_url": "https://api.github.com/users/rvl/orgs",
+      "repos_url": "https://api.github.com/users/rvl/repos",
+      "events_url": "https://api.github.com/users/rvl/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/rvl/received_events",
+      "type": "User",
+      "site_admin": false
+    },
+    "repository_selection": "all",
+    "access_tokens_url": "https://api.github.com/installations/73241/access_tokens",
+    "repositories_url": "https://api.github.com/installation/repositories",
+    "html_url": "https://github.com/settings/installations/73241",
+    "app_id": 7071,
+    "target_id": 1019641,
+    "target_type": "User",
+    "permissions": {
+      "statuses": "write",
+      "contents": "read",
+      "metadata": "read",
+      "pull_requests": "read"
+    },
+    "events": [
+      "create",
+      "pull_request",
+      "push"
+    ],
+    "created_at": 1512982957,
+    "updated_at": 1512982957,
+    "single_file_name": null
+  },
+  "repositories": [
+    {
+      "id": 3387076,
+      "name": "openlayers",
+      "full_name": "rvl/openlayers"
+    },
+    {
+      "id": 3582118,
+      "name": "hdbus",
+      "full_name": "rvl/hdbus"
+    },
+    {
+      "id": 3901211,
+      "name": "gpxanim",
+      "full_name": "rvl/gpxanim"
+    },
+    {
+      "id": 6319073,
+      "name": "ikiwiki-wordpress-import",
+      "full_name": "rvl/ikiwiki-wordpress-import"
+    },
+    {
+      "id": 11495105,
+      "name": "django-test-extras",
+      "full_name": "rvl/django-test-extras"
+    },
+    {
+      "id": 11896139,
+      "name": "pkg-fabric",
+      "full_name": "rvl/pkg-fabric"
+    },
+    {
+      "id": 22859617,
+      "name": "ghcjs-docker",
+      "full_name": "rvl/ghcjs-docker"
+    },
+    {
+      "id": 23220583,
+      "name": "ghcjs-examples",
+      "full_name": "rvl/ghcjs-examples"
+    },
+    {
+      "id": 32445475,
+      "name": "checkrainpi",
+      "full_name": "rvl/checkrainpi"
+    },
+    {
+      "id": 48947566,
+      "name": "gdiff-th",
+      "full_name": "rvl/gdiff-th"
+    },
+    {
+      "id": 48965374,
+      "name": "lucid",
+      "full_name": "rvl/lucid"
+    },
+    {
+      "id": 51970246,
+      "name": "bower2nix",
+      "full_name": "rvl/bower2nix"
+    },
+    {
+      "id": 53667210,
+      "name": "bower-angular-component-router",
+      "full_name": "rvl/bower-angular-component-router"
+    },
+    {
+      "id": 54783005,
+      "name": "nixpkgs",
+      "full_name": "rvl/nixpkgs"
+    },
+    {
+      "id": 59861042,
+      "name": "guestbook",
+      "full_name": "rvl/guestbook"
+    },
+    {
+      "id": 62521955,
+      "name": "hsoz",
+      "full_name": "rvl/hsoz"
+    },
+    {
+      "id": 65221247,
+      "name": "sampleproject",
+      "full_name": "rvl/sampleproject"
+    },
+    {
+      "id": 65662875,
+      "name": "haskell-opaleye",
+      "full_name": "rvl/haskell-opaleye"
+    },
+    {
+      "id": 72871136,
+      "name": "haskell-dbus",
+      "full_name": "rvl/haskell-dbus"
+    },
+    {
+      "id": 74399910,
+      "name": "reflex-platform",
+      "full_name": "rvl/reflex-platform"
+    },
+    {
+      "id": 81029223,
+      "name": "cabal2nix",
+      "full_name": "rvl/cabal2nix"
+    },
+    {
+      "id": 85535703,
+      "name": "fernet-hs",
+      "full_name": "rvl/fernet-hs"
+    },
+    {
+      "id": 88956663,
+      "name": "reflex-material",
+      "full_name": "rvl/reflex-material"
+    },
+    {
+      "id": 90542890,
+      "name": "hoogle-local",
+      "full_name": "rvl/hoogle-local"
+    },
+    {
+      "id": 90666538,
+      "name": "hyper-haskell",
+      "full_name": "rvl/hyper-haskell"
+    },
+    {
+      "id": 97327517,
+      "name": "styx",
+      "full_name": "rvl/styx"
+    },
+    {
+      "id": 99431486,
+      "name": "docs",
+      "full_name": "rvl/docs"
+    },
+    {
+      "id": 99600738,
+      "name": "flatris",
+      "full_name": "rvl/flatris"
+    },
+    {
+      "id": 99626141,
+      "name": "diagrams-reflex",
+      "full_name": "rvl/diagrams-reflex"
+    },
+    {
+      "id": 109581419,
+      "name": "tour",
+      "full_name": "rvl/tour"
+    },
+    {
+      "id": 111319765,
+      "name": "hercules",
+      "full_name": "rvl/hercules"
+    }
+  ],
+  "sender": {
+    "login": "rvl",
+    "id": 1019641,
+    "avatar_url": "https://avatars3.githubusercontent.com/u/1019641?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/rvl",
+    "html_url": "https://github.com/rvl",
+    "followers_url": "https://api.github.com/users/rvl/followers",
+    "following_url": "https://api.github.com/users/rvl/following{/other_user}",
+    "gists_url": "https://api.github.com/users/rvl/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/rvl/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/rvl/subscriptions",
+    "organizations_url": "https://api.github.com/users/rvl/orgs",
+    "repos_url": "https://api.github.com/users/rvl/repos",
+    "events_url": "https://api.github.com/users/rvl/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/rvl/received_events",
+    "type": "User",
+    "site_admin": false
+  }
+}

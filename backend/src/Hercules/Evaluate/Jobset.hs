@@ -42,11 +42,13 @@ import Hercules.Evaluate.ReleaseExpr
 import Hercules.Evaluate.Fetch
 import qualified Hercules.Database.Hydra as Hydra
 import Hercules.Query.Hydra
-import Hercules.Sync.GitHub (gitHubAppRepoURI)
+import Hercules.Sync.GitHub (gitHubAppRepoURI, Id, mkId, Installation)
+import Data.Proxy (Proxy(..))
 
 data JobsetInfo = JobsetInfo { infoRepo :: GithubRepo
                              , infoBranch :: GithubBranch
                              , infoSpec :: BuildSpec
+                             , infoInstallation :: Id Installation
                              }
 
 -- | Jobset ID -- happens to also be the branch id currently.
@@ -62,9 +64,9 @@ jobsetInfoKey js = jobsetInfoProject js <> ":" <> jobsetName js
   where jobsetName = githubBranchName . infoBranch
 
 evaluateJobset :: JobsetInfo -> App ()
-evaluateJobset js@(JobsetInfo repo branch spec) = do
+evaluateJobset js@(JobsetInfo repo branch spec inst) = do
   ((src, buildInputs), checkoutTime) <- timeAction $ do
-    src <- fetchJobsetSource repo branch spec
+    src <- fetchJobsetSource js
     buildInputs <- fetchInputs (githubRepoName repo) (githubBranchName branch) (buildInputs spec)
     return (src, buildInputs)
 
@@ -306,11 +308,11 @@ data JobsetSource = JobsetSource
   , srcBuildSpec    :: BuildSpec
   } deriving (Show, Eq)
 
-fetchJobsetSource :: GithubRepo -> GithubBranch -> BuildSpec -> App JobsetSource
-fetchJobsetSource repo branch spec = do
-  uri <- gitHubAppRepoURI repo
-  FetchInputGit{..} <- liftIO $ fetchInputGit uri CloneDeep (Just (githubBranchName branch))
-  return $ JobsetSource fetchGitStorePath fetchGitSHA256Hash spec
+fetchJobsetSource :: JobsetInfo -> App JobsetSource
+fetchJobsetSource JobsetInfo{..} = do
+  uri <- gitHubAppRepoURI infoInstallation infoRepo
+  FetchInputGit{..} <- liftIO $ fetchInputGit uri CloneDeep (Just (githubBranchName (infoBranch)))
+  return $ JobsetSource fetchGitStorePath fetchGitSHA256Hash infoSpec
 
 -- | Find previous evaluation and its number of builds
 getPrevJobsetEval :: Bool -> JobsetId -> Connection -> IO (Maybe Jobseteval)
@@ -354,9 +356,11 @@ findJobsetOld p j = runHerculesQueryWithConnectionSingular (findJobsetQueryOld p
 -- | Jobset info for a branch.
 -- Returns Nothing if disabled or spec missing.
 jobsetInfo :: GithubRepo -> GithubBranch -> Maybe JobsetInfo
-jobsetInfo repo branch = JobsetInfo repo branch <$> spec
-  where spec | githubRepoEnabled repo = branchBuildSpec branch
-             | otherwise = Nothing
+jobsetInfo repo branch = JobsetInfo repo branch <$> spec <*> inst
+  where
+    spec | githubRepoEnabled repo = branchBuildSpec branch
+         | otherwise = Nothing
+    inst = mkId Proxy <$> (githubRepoInstallationId repo)
 
 lookupBranch :: ProjectName -> JobsetName -> Connection -> IO (Maybe (GithubRepo, GithubBranch))
 lookupBranch p j conn = listToMaybe <$> runQuery conn (findJobsetQuery p j)

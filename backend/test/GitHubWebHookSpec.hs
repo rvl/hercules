@@ -89,6 +89,16 @@ spec = do
         get "/github/registration" `shouldRespondWith` 200 { matchBody = MatchBody (containsStr "7071") }
         -- fixme: use different app_id and check that it's updated
 
+    describe "GitHub webhook Integration" $ do
+      xit "stores installation id in database" $ withApp $ do
+        ping <- liftIO getPingRequest
+        _ <- request "POST" "/github/webhook" (signedPingHeaders ping) ping
+        inst <- liftIO getInstallationRequest
+        request "POST" "/github/webhook" (signedInstallationHeaders inst) inst `shouldRespondWith` 200
+        -- fixme: check installation id
+        -- fixme: check that repos are created
+        -- probably by adding repos api and listing github repos
+
 containsStr :: S8.ByteString -> [Header] -> Body -> Maybe String
 containsStr s _ body | s `S8.isInfixOf` (BL8.toStrict body) = Nothing
                      | otherwise = Just $ "body mismatch: expected to find " ++ S8.unpack s
@@ -118,6 +128,18 @@ postHeaders :: [Header]
 postHeaders = [ ("X-GitHub-Event", "pull_request")
               , ("content-type", "application/json")
               ]
+
+getInstallationRequest :: IO BL.ByteString
+getInstallationRequest = BL.readFile "test/data/integration.json"
+
+signedInstallationHeaders :: BL.ByteString -> [Header]
+signedInstallationHeaders payload = (signatureHeader payload:hdrs)
+  where hdrs =  [ ("X-GitHub-Event", "integration_installation")
+                , ("content-type", "application/json")
+                , ("Expect", "")
+                , ("User-Agent", "GitHub-Hookshot/a322ef4")
+                , ("X-GitHub-Delivery", "08f13700-de52-11e7-8c03-cdbe99d62a28")
+                ]
 
 withApplication' :: ActionWith Application -> ActionWith Env
 withApplication' action env = action (app env)

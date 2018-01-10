@@ -16,12 +16,10 @@ module Hercules.Hooks.GitHub
   ) where
 
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as T
 import Control.Monad.Except
 import Control.Monad.Log
 import Data.Monoid
-import qualified Data.ByteString.Lazy as BL
 import Safe
 import Data.Foldable
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -158,8 +156,15 @@ gitHubAppRegistration = listToMaybe <$> runHerculesQueryWithConnection gitHubApp
 -- Integration installation.
 -- When a github user enables the app.
 
-data IntegrationInstallation = IntegrationInstallation {
-  installationRepos :: [IntegrationRepo]
+data IntegrationInstallation = IntegrationInstallation
+  { installationIntegration :: !Installation
+  , installationAccount :: !SimpleOwner
+  , installationRepos :: !([IntegrationRepo])
+  } deriving (Show, Generic)
+
+data Installation = Installation
+  { installationId :: !Int
+  , installationAppId :: !Int
   } deriving (Show, Generic)
 
 data IntegrationRepo = IntegrationRepo
@@ -169,8 +174,12 @@ data IntegrationRepo = IntegrationRepo
                        } deriving (Show, Generic)
 
 instance FromJSON IntegrationInstallation where
-    parseJSON = withObject "integration event" $ \o ->
-      IntegrationInstallation <$> (o .: "repositories")
+  parseJSON = withObject "integration event" $ \o ->
+    IntegrationInstallation <$> o .: "installation" <*> o .: "account" <*> o .: "repositories"
+
+instance FromJSON Installation where
+  parseJSON = withObject "installation" $ \o ->
+    Installation <$> o .: "id" <*> o .: "app_id"
 
 instance FromJSON IntegrationRepo where
   parseJSON = withObject "integration repo" $ \o ->
@@ -178,13 +187,15 @@ instance FromJSON IntegrationRepo where
 
 gitHubWebHookInstallation :: RepoWebhookEvent -> ((), IntegrationInstallation) -> App NoContent
 gitHubWebHookInstallation _ (_, IntegrationInstallation{..}) = do
-  withHerculesConnection $ \c ->
-    addUpdateGitHubRepos c (map makeRepo installationRepos)
+  withHerculesConnection $ \c -> do
+    let Installation{..} = installationIntegration
+    addInstallation c installationId installationAppId (untagId . simpleOwnerId $ installationAccount)
+    addUpdateGitHubRepos c (map (makeRepo installationId) installationRepos)
   return NoContent
   where
-    makeRepo IntegrationRepo{..} =
+    makeRepo inst IntegrationRepo{..} =
       GithubRepo (untagId integrationRepoId) (untagName integrationRepoName)
-      integrationRepoFullName "" "" False
+      integrationRepoFullName "" "" False (Just inst)
 
 ----------------------------------------------------------------------------
 -- all instances required to document webhook endpoints in swagger...

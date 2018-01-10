@@ -1,12 +1,24 @@
 SET search_path TO hercules, public, pg_catalog;
 
+CREATE TABLE github_app (
+    app_id integer NOT NULL PRIMARY KEY,
+    updated_at timestamptz NOT NULL
+);
+
+CREATE TABLE github_installation (
+    id integer PRIMARY KEY NOT NULL,
+    app_id integer NOT NULL REFERENCES github_app(app_id),
+    account_id integer NOT NULL
+);
+
 CREATE TABLE github_repos (
   id integer PRIMARY KEY NOT NULL,
   name text NOT NULL,
   full_name text NOT NULL,
   default_branch text NOT NULL,
   remote_uri text NOT NULL,
-  enabled boolean NOT NULL DEFAULT FALSE
+  enabled boolean NOT NULL DEFAULT FALSE,
+  installation_id integer REFERENCES github_installation(id)
   -- possibly adding fork information would make cloning quicker
 );
 

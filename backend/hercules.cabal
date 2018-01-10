@@ -74,6 +74,7 @@ library
                      , HsOpenSSL
                      , http-client
                      , http-client-tls
+                     , http-types
                      , interpolatedstring-perl6
                      , jose
                      , lens
@@ -208,6 +209,7 @@ test-suite test
                      , jose
                      , lens
                      , memory
+                     , monad-control
                      , mtl
                      , natural-transformation
                      , network-uri

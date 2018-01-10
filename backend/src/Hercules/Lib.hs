@@ -43,7 +43,7 @@ import Hercules.Config
 import Hercules.Database.Extra       (JobsetNullable, Project,
                                       ProjectWithJobsets (..),
                                       fromNullableJobset, projectName)
-import Hercules.Database.Hercules    (GithubRepo, userGithubId, User(..))
+import Hercules.Database.Hercules    (GithubRepo(..), userGithubId, User(..))
 import Hercules.OAuth
 import Hercules.OAuth.Authenticators
 import Hercules.Query.Hydra

@@ -50,7 +50,7 @@ setUpJobset = withHerculesConnection $ \c -> do
   let repoId = 111319765
       rev = "081ae8c2568f0948eafab88a0eb670edcd830eed"
       sha256 = "1fd64ba72b037944d7e57d3e07e189bd8fb293302e176586092c74519e1d0d1b"
-  addUpdateGitHubRepos c [GithubRepo repoId "hercules" "rvl/hercules" "master" "https://github.com/rvl/hercules.git" True]
+  addUpdateGitHubRepos c [GithubRepo repoId "hercules" "rvl/hercules" "master" "https://github.com/rvl/hercules.git" True Nothing]
   branchId <- updateJobsetBranch c repoId "master" rev specJSON
   -- fixme: addSource c branchId "/nix/store/yqlzi43dw7ppirynwcqf4a1ll9v0w4jp-w1711jp1df86yl97j2g70ww9b4wx3b3b-backend" sha256
   return ()

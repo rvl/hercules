@@ -8,6 +8,9 @@ module Hercules.Sync.GitHub
   , gitHubAppRepoURI
   , addJobsetGitHub
   , PullRequest(..)
+  , Id
+  , mkId
+  , Installation
   ) where
 
 import GitHub.Endpoints.PullRequests hiding (User(..))
@@ -30,8 +33,10 @@ import Data.Maybe (fromMaybe)
 import Crypto.JWT hiding (Error)
 import Control.Monad.Reader
 import Control.Monad.Except
+import Control.Error
 import Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
-import Network.URI (URI(..), URIAuth(..))
+import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime, posixSecondsToUTCTime)
+import Network.URI (URI(..), URIAuth(..), parseURI)
 import Control.Lens
 import Data.Yaml                (decodeEither', prettyPrintParseException)
 
@@ -79,7 +84,7 @@ updateListRepos rs = withHerculesConnection $ flip addUpdateGitHubRepos rs'
                           (repoFullName r)
                           (fromMaybe "" repoDefaultBranch)
                           (T.pack $ show repoUrl)
-                          False
+                          False Nothing
 
 -- | Make owner/repo string from Repo data.
 repoFullName :: Repo -> Text
@@ -102,20 +107,26 @@ syncBranchList Repo{..} = do
 
 -- | Get an authenticated HTTP clone URI for the app integration and
 -- github repo.
-gitHubAppRepoURI :: GithubRepo -> App URI
-gitHubAppRepoURI repo = do
+gitHubAppRepoURI :: Id Installation -> GithubRepo -> App URI
+gitHubAppRepoURI inst repo = do
   iss <- withHerculesConnection getGitHubAppId >>=
     maybe (fail "No app registered") (pure . mkId Proxy)
   jwt <- repoJWT iss
-  repoCloneURI repo iss jwt
+  token <- repoCloneToken inst jwt
+  return $ repoURI token repo
 
 -- fixme: runExceptT and ExceptT String App a
-syncRepo :: GithubRepo -> App FilePath
-syncRepo repo = gitHubAppRepoURI repo >>= liftIO . fetchRepoGit
+syncRepo :: Maybe (Id Installation) -> GithubRepo -> App FilePath
+syncRepo inst repo = uri >>= liftIO . fetchRepoGit
+  where
+    uri = maybe plainUri (flip gitHubAppRepoURI repo) inst
+    repoUri = parseURI . T.unpack . githubRepoRemoteUri $ repo
+    plainUri = maybe (fail "bad repo uri") pure repoUri
 
 syncRepoBranch :: GithubRepo -> Text -> App (FilePath, Text, Maybe Value)
 syncRepoBranch repo branchName = do
-  clonePath <- syncRepo repo
+  let inst = mkId Proxy <$> githubRepoInstallationId repo
+  clonePath <- syncRepo inst repo
   liftIO $ syncBranch branchName clonePath
 
 syncBranch :: Text -> FilePath -> IO (FilePath, Text, Maybe Value)
@@ -133,12 +144,12 @@ addJobsetGitHub repo branchName clonePath rev spec =
     updateGitHubRepoCache c (githubRepoId repo) clonePath
     void $ updateJobsetBranch c (githubRepoId repo) branchName rev spec
 
-repoCloneURI :: GithubRepo -> Id Installation -> SignedJWT -> App URI
-repoCloneURI repo appId jwt = do
+repoCloneToken :: Id Installation -> SignedJWT -> App Token
+repoCloneToken appId jwt = do
   let jwt' = BL.toStrict $ encodeCompact jwt
   liftIO $ createInstallationAccessToken' jwt' appId >>= \case
-    Left err -> fail "blah blah"
-    Right token -> return $ repoURI (tokenText token) repo
+    Left err -> fail (show err)
+    Right token -> return $ tokenText token
 
 repoURI :: ByteString -> GithubRepo -> URI
 repoURI token GithubRepo{..} = URI "https" (Just auth) (T.unpack path) "" ""
@@ -160,11 +171,15 @@ repoJWT appId = do
 
 repoJWTClaims :: Id Installation -> App ClaimsSet
 repoJWTClaims appId = do
-  t <- liftIO getCurrentTime
+  t <- floorUTCTime <$> liftIO getPOSIXTime
   pure $ emptyClaimsSet
     & claimIat .~ Just (NumericDate t)
     & claimExp .~ Just (NumericDate (gitHubMaxExp t))
     & claimIss .~ (show (untagId appId) ^? stringOrUri)
+
+-- github requires integer times
+floorUTCTime :: POSIXTime -> UTCTime
+floorUTCTime = posixSecondsToUTCTime . fromIntegral . (floor :: POSIXTime -> Int)
 
 -- github maximum expiry time is 10 mins
 gitHubMaxExp :: UTCTime -> UTCTime
