@@ -208,6 +208,7 @@ test-suite test
                      , http-types
                      , jose
                      , lens
+                     , lifted-base
                      , memory
                      , monad-control
                      , mtl
@@ -218,6 +219,7 @@ test-suite test
                      , servant-github-webhook
                      , servant-server
                      , text
+                     , transformers
                      , tmp-postgres
                      , wai
                      , wai-extra

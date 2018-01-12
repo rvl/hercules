@@ -36,6 +36,7 @@ import Control.Monad.Trans.Control
 import Control.Monad.Base
 import Control.Monad.Log
 import Control.Monad.Reader
+import Control.Exception (throwIO)
 import Crypto.Cipher.AES
 import Crypto.Cipher.Types
 import Crypto.Error
@@ -109,13 +110,11 @@ newtype App a = App
 
 instance MonadBaseControl IO App where
   type StM App a = a
-  liftBaseWith f = App $ liftBaseWith $ \runInBase -> f (helpMeImConfused . runInBase . unApp)
+  liftBaseWith f = App $ liftBaseWith $ \runInBase -> f (handleServantErr . runInBase . unApp)
   restoreM = App . restoreM . restoreM
 
-helpMeImConfused :: IO (Either ServantErr a) -> IO a
-helpMeImConfused action = action >>= \case
-  Right a -> return a
-  Left err -> fail $ "oh bugger, ServantErr: " ++ show err
+handleServantErr :: IO (Either ServantErr a) -> IO a
+handleServantErr action = action >>= either throwIO pure
 
 -- | Perform an action with a PostgreSQL connection to the Hercules DB and
 -- return the result
