@@ -9,5 +9,7 @@ haskellPackageGen {
   override = attrs: {
     testToolDepends = attrs.testToolDepends or [] ++ [ postgresql ];
     buildInputs = attrs.buildInputs ++ [ postgresql ];
+    # https://github.com/hspec/hspec/issues/232
+    checkPhase = "./Setup test --show-details=direct";
   };
 } src
