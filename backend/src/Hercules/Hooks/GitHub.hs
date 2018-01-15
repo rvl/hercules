@@ -45,6 +45,8 @@ import           GitHub.Request (executeRequestWithMgr)
 import GitHub.Endpoints.PullRequests hiding (User)
 
 import Data.Swagger (ToSchema(..))
+import Servant.Elm (ElmType(..))
+
 import Servant
 import Servant.Swagger
 import Servant.GitHub.Webhook
@@ -65,9 +67,9 @@ type GitHubAppAPI = "github" :> "webhook" :> (
       :> GitHubSignedReqBody '[JSON] PingRegistration
       :> Post '[JSON] NoContent
       :<|>
-    -- fixme: these events/types don't exist in github package
-    GitHubEvent '[ 'WebhookWildcardEvent {- 'WebhookInstallationEvent 'WebhookIntegrationInstallationEvent -} ]
-      :> GitHubSignedReqBody '[JSON] IntegrationInstallation
+    -- fixme: these events/types don't exist in github package, need to add
+    {- GitHubEvent '[ 'WebhookInstallationEvent, 'WebhookIntegrationInstallationEvent ] :> -}
+    GitHubSignedReqBody '[JSON] IntegrationInstallationEvent
       :> Post '[JSON] NoContent
     ) :<|>
   "github" :> "registration" :> Get '[JSON] (Maybe GithubApp)
@@ -156,41 +158,42 @@ gitHubAppRegistration = listToMaybe <$> runHerculesQueryWithConnection gitHubApp
 -- Integration installation.
 -- When a github user enables the app.
 
-data IntegrationInstallation = IntegrationInstallation
-  { installationIntegration :: !Installation
-  , installationAccount :: !SimpleOwner
-  , installationRepos :: !([IntegrationRepo])
+data IntegrationInstallationEvent = IntegrationInstallationEvent
+  { installationIntegrationEventInstallation :: !Installation
+  , installationIntegrationEventSender       :: !SimpleOwner
+  , installationIntegrationEventRepos        :: !([IntegrationRepo])
   } deriving (Show, Generic)
 
 data Installation = Installation
-  { installationId :: !Int
-  , installationAppId :: !Int
+  { installationId      :: !Int
+  , installationAccount :: !SimpleOwner
+  , installationAppId   :: !Int
   } deriving (Show, Generic)
 
 data IntegrationRepo = IntegrationRepo
-                       { integrationRepoId :: !(Id Repo)
-                       , integrationRepoName :: !(Name Repo)
-                       , integrationRepoFullName :: !Text
-                       } deriving (Show, Generic)
+  { integrationRepoId       :: !(Id Repo)
+  , integrationRepoName     :: !(Name Repo)
+  , integrationRepoFullName :: !Text
+  } deriving (Show, Generic)
 
-instance FromJSON IntegrationInstallation where
-  parseJSON = withObject "integration event" $ \o ->
-    IntegrationInstallation <$> o .: "installation" <*> o .: "account" <*> o .: "repositories"
+instance FromJSON IntegrationInstallationEvent where
+  parseJSON = withObject "IntegrationInstallationEvent" $ \o ->
+    IntegrationInstallationEvent <$> o .: "installation" <*> o .: "sender" <*> o .: "repositories"
 
 instance FromJSON Installation where
-  parseJSON = withObject "installation" $ \o ->
-    Installation <$> o .: "id" <*> o .: "app_id"
+  parseJSON = withObject "Installation" $ \o ->
+    Installation <$> o .: "id" <*> o .: "account" <*> o .: "app_id"
 
 instance FromJSON IntegrationRepo where
   parseJSON = withObject "integration repo" $ \o ->
     IntegrationRepo <$> o .: "id" <*> o .: "name" <*> o .: "full_name"
 
-gitHubWebHookInstallation :: RepoWebhookEvent -> ((), IntegrationInstallation) -> App NoContent
-gitHubWebHookInstallation _ (_, IntegrationInstallation{..}) = do
+gitHubWebHookInstallation :: ((), IntegrationInstallationEvent) -> App NoContent
+gitHubWebHookInstallation (_, IntegrationInstallationEvent{..}) = do
   withHerculesConnection $ \c -> do
-    let Installation{..} = installationIntegration
+    let Installation{..} = installationIntegrationEventInstallation
     addInstallation c installationId installationAppId (untagId . simpleOwnerId $ installationAccount)
-    addUpdateGitHubRepos c (map (makeRepo installationId) installationRepos)
+    addUpdateGitHubRepos c (map (makeRepo installationId) installationIntegrationEventRepos)
   return NoContent
   where
     makeRepo inst IntegrationRepo{..} =
@@ -201,6 +204,9 @@ gitHubWebHookInstallation _ (_, IntegrationInstallation{..}) = do
 -- all instances required to document webhook endpoints in swagger...
 
 instance ToSchema PingRegistration
+instance ToSchema IntegrationInstallationEvent
+instance ToSchema Installation
+instance ToSchema IntegrationRepo
 
 instance ToSchema GH.URL
 instance ToSchema GH.IssueState
@@ -223,3 +229,15 @@ instance ToSchema (GH.Id GH.User)
 instance ToSchema (GH.Name GH.Owner)
 instance ToSchema (GH.Name GH.Repo)
 instance ToSchema (GH.Name GH.User)
+
+-- instances required for gen-elm
+instance ElmType GH.SimpleOwner
+instance ElmType (GH.Id GH.Owner)
+instance ElmType (GH.Name GH.Owner)
+instance ElmType (URL)
+instance ElmType (GH.Id GH.Repo)
+instance ElmType (GH.Name GH.Repo)
+instance ElmType GH.OwnerType
+instance ElmType IntegrationInstallationEvent
+instance ElmType Installation
+instance ElmType IntegrationRepo

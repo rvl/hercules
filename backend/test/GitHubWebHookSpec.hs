@@ -28,12 +28,14 @@ import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteArray.Encoding as B (Base (..), convertToBase)
 import qualified Data.Text as T
+import Data.Maybe (fromMaybe)
 import Crypto.MAC.HMAC
 import Crypto.Hash (SHA1)
 import Data.Monoid
 import Data.Default
 import Control.Monad.Except
 import Say
+import Data.Aeson (FromJSON(..), decode)
 
 import           GitHub.Data.PullRequests
 import           GitHub.Data.Webhooks
@@ -42,8 +44,11 @@ import Hercules.Config
 import Hercules.ServerEnv
 import Hercules.Lib (appContext, appToHandler)
 import Hercules.Hooks.GitHub
-import Hercules.Query.Hercules (getGitHubAppId)
-
+import Hercules.Database.Hercules (User'(..), GithubRepo'(..), GithubRepo)
+import Hercules.Query.Hercules (getGitHubAppId, insertUser)
+import Hercules.OAuth.Types (PackedJWT(..))
+import Hercules.Lib hiding (app)
+import Hercules.API (API(..))
 import TestEnv
 
 spec :: Spec
@@ -90,14 +95,44 @@ spec = do
         -- fixme: use different app_id and check that it's updated
 
     describe "GitHub webhook Integration" $ do
-      xit "stores installation id in database" $ withApp $ do
+      it "stores installation id in database" $ \TestEnv{..} -> withApplication (app testEnv) $ do
+        -- setup app id
         ping <- liftIO getPingRequest
         _ <- request "POST" "/github/webhook" (signedPingHeaders ping) ping
+        -- send installation webhook event
         inst <- liftIO getInstallationRequest
         request "POST" "/github/webhook" (signedInstallationHeaders inst) inst `shouldRespondWith` 200
-        -- fixme: check installation id
-        -- fixme: check that repos are created
-        -- probably by adding repos api and listing github repos
+        -- check the protected repos api for results of installation
+        Right tok <- liftIO $ runExceptT (runApp testEnv makeTestUserJWT)
+        request "GET" "/protected/repos" (protectedHeaders tok) "" `shouldRespondWith`
+          matchJSON (matchRepos 73241)
+
+matchJSON :: FromJSON a => (a -> Maybe String) -> ResponseMatcher
+matchJSON exp = ResponseMatcher 200 [MatchHeader isJson] (MatchBody matchBody)
+  where
+    isJson hdrs _ | hasJsonContentType hdrs = Nothing
+                  | otherwise = Just "content-type wasn't application/json"
+    hasJsonContentType hdrs = fromMaybe False (S8.isPrefixOf "application/json" <$> lookup "Content-Type" hdrs)
+    matchBody _ body = case decode body of
+      Just a -> exp a
+      Nothing -> Just "Couldn't decode body as JSON"
+
+matchRepos :: Int -> [GithubRepo] -> Maybe String
+matchRepos _ [] = Just "Expected some repos"
+matchRepos inst (r:rs) | githubRepoInstallationId r == Just inst = Nothing
+                       | otherwise = Just "wrong installation id"
+
+makeTestUserJWT :: App PackedJWT
+makeTestUserJWT = do
+  let u = User Nothing "Test User" "test@test.com" "" ""
+  Just uid <- withHerculesConnection $ \c -> insertUser c u
+  Right jwt <- makeUserJWT uid
+  return jwt
+
+protectedHeaders :: PackedJWT -> [Header]
+protectedHeaders jwt = [ ("Accept", "application/json")
+                       , ("Authorization", "Bearer " <> unPackedJWT jwt)
+                       ]
 
 containsStr :: S8.ByteString -> [Header] -> Body -> Maybe String
 containsStr s _ body | s `S8.isInfixOf` (BL8.toStrict body) = Nothing
@@ -149,7 +184,11 @@ withApp :: WaiSession a -> TestEnv -> IO a
 withApp action TestEnv{..} = withApplication (app testEnv) action
 
 app :: Env -> Application
-app env = serveWithContext api (appContext env) (gitHubAppServer env)
+app env = serveWithContext api (appContext env) (server env)
+  where api = Proxy :: Proxy API
+
+appOnlyGitHub :: Env -> Application
+appOnlyGitHub env = serveWithContext api (appContext env) (gitHubAppServer env)
   where api = Proxy :: Proxy GitHubAppAPI
 
 -- | Test the GitHub hook API by itself.
